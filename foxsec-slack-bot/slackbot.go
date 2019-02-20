@@ -29,7 +29,7 @@ var (
 
 const (
 	EMAIL_CHAR_SET             = "UTF-8"
-	WHITELIST_IP_SLASH_COMMAND = "whitelist_ip"
+	WHITELIST_IP_SLASH_COMMAND = "/whitelist_ip"
 )
 
 func init() {
@@ -171,7 +171,6 @@ func FoxsecSlackBot(w http.ResponseWriter, r *http.Request) {
 
 	if cmd, err := slack.SlashCommandParse(r); err == nil {
 		log.Debug("Slash command parsed")
-		log.Infof("%v", cmd)
 		log.Infof("Command: %s", cmd.Command)
 		if cmd.Command == WHITELIST_IP_SLASH_COMMAND {
 			log.Debug("Handling whitelist ip command")
