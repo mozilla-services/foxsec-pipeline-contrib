@@ -36,9 +36,35 @@ func (db *DBClient) alertKey(alertId string) *datastore.Key {
 	return datastore.NameKey(ALERT_KIND, alertId, nil)
 }
 
+func (db *DBClient) RemoveExpiredWhitelistedIps(ctx context.Context) error {
+	ips, err := db.GetAllWhitelistedIps(ctx)
+	if err != nil {
+		return err
+	}
+	for _, ip := range ips {
+		if ip.IsExpired() {
+			err = db.DeleteWhitelistedIp(ctx, ip)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (db *DBClient) GetAllWhitelistedIps(ctx context.Context) ([]*WhitelistedIP, error) {
+	var ips []*WhitelistedIP
+	_, err := db.dsClient.GetAll(ctx, datastore.NewQuery(IP_KIND), &ips)
+	return ips, err
+}
+
 func (db *DBClient) SaveWhitelistedIp(ctx context.Context, whitelistedIp *WhitelistedIP) error {
 	_, err := db.dsClient.Put(ctx, db.whitelistedIpKey(whitelistedIp.IP), whitelistedIp)
 	return err
+}
+
+func (db *DBClient) DeleteWhitelistedIp(ctx context.Context, whitelistedIp *WhitelistedIP) error {
+	return db.dsClient.Delete(ctx, db.whitelistedIpKey(whitelistedIp.IP))
 }
 
 func (db *DBClient) GetAlert(ctx context.Context, alertId string) (*Alert, error) {

@@ -20,3 +20,7 @@ func NewWhitelistedIP(ip string, expiresAt time.Time, createdBy string) *Whiteli
 		CreatedBy: createdBy,
 	}
 }
+
+func (ip *WhitelistedIP) IsExpired() bool {
+	return ip.ExpiresAt.Before(time.Now())
+}
