@@ -105,7 +105,7 @@ func handleWhitelistCmd(ctx context.Context, cmd slack.SlashCommand, db *common.
 		return msg, err
 	}
 
-	msg.Text = fmt.Sprintf("Successfully saved %s to the whitelist. Will expire at %s", ip, expiresAt)
+	msg.Text = fmt.Sprintf("Successfully saved %s to the whitelist. Will expire at %s", ip, expiresAt.Format(time.UnixDate))
 	return msg, nil
 }
 
