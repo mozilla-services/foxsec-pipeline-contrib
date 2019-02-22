@@ -8,20 +8,20 @@ import (
 )
 
 const (
-	IP_KIND = "whitelisted_ip"
+	IP_KIND      = "whitelisted_ip"
+	IP_NAMESPACE = "whitelisted_ip"
 )
 
 type DBClient struct {
-	dsClient  *datastore.Client
-	namespace string
+	dsClient *datastore.Client
 }
 
-func NewDBClient(ctx context.Context, projectID string, namespace string) (*DBClient, error) {
+func NewDBClient(ctx context.Context, projectID string) (*DBClient, error) {
 	dsClient, err := datastore.NewClient(ctx, projectID)
 	if err != nil {
 		return nil, err
 	}
-	return &DBClient{dsClient, namespace}, nil
+	return &DBClient{dsClient}, nil
 }
 
 type StateField struct {
@@ -51,9 +51,7 @@ func (db *DBClient) Close() error {
 
 func (db *DBClient) whitelistedIpKey(ip string) *datastore.Key {
 	nk := datastore.NameKey(IP_KIND, ip, nil)
-	if db.namespace != "" {
-		nk.Namespace = db.namespace
-	}
+	nk.Namespace = IP_NAMESPACE
 	return nk
 }
 
@@ -76,10 +74,7 @@ func (db *DBClient) RemoveExpiredWhitelistedIps(ctx context.Context) error {
 func (db *DBClient) GetAllWhitelistedIps(ctx context.Context) ([]*WhitelistedIP, error) {
 	var ips []*WhitelistedIP
 	var states []*StateField
-	nq := datastore.NewQuery(IP_KIND)
-	if db.namespace != "" {
-		nq = nq.Namespace(db.namespace)
-	}
+	nq := datastore.NewQuery(IP_KIND).Namespace(IP_NAMESPACE)
 	_, err := db.dsClient.GetAll(ctx, nq, &states)
 	for _, state := range states {
 		ip, err := StateToWhitelistedIp(state)
