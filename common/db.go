@@ -2,14 +2,13 @@ package common
 
 import (
 	"context"
+	"encoding/json"
 
 	"cloud.google.com/go/datastore"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
-	ALERT_KIND = "alert"
-	IP_KIND    = "whitelisted_ip"
+	IP_KIND = "whitelisted_ip"
 )
 
 type DBClient struct {
@@ -25,20 +24,33 @@ func NewDBClient(ctx context.Context, projectID string, namespace string) (*DBCl
 	return &DBClient{dsClient, namespace}, nil
 }
 
+type StateField struct {
+	State string `json:"state"`
+}
+
+func WhitelistedIpToState(wip *WhitelistedIP) (*StateField, error) {
+	buf, err := json.Marshal(wip)
+	if err != nil {
+		return nil, err
+	}
+	return &StateField{string(buf)}, nil
+}
+
+func StateToWhitelistedIp(sf *StateField) (*WhitelistedIP, error) {
+	var wip WhitelistedIP
+	err := json.Unmarshal([]byte(sf.State), &wip)
+	if err != nil {
+		return nil, err
+	}
+	return &wip, nil
+}
+
 func (db *DBClient) Close() error {
 	return db.dsClient.Close()
 }
 
 func (db *DBClient) whitelistedIpKey(ip string) *datastore.Key {
 	nk := datastore.NameKey(IP_KIND, ip, nil)
-	if db.namespace != "" {
-		nk.Namespace = db.namespace
-	}
-	return nk
-}
-
-func (db *DBClient) alertKey(alertId string) *datastore.Key {
-	nk := datastore.NameKey(ALERT_KIND, alertId, nil)
 	if db.namespace != "" {
 		nk.Namespace = db.namespace
 	}
@@ -63,55 +75,31 @@ func (db *DBClient) RemoveExpiredWhitelistedIps(ctx context.Context) error {
 
 func (db *DBClient) GetAllWhitelistedIps(ctx context.Context) ([]*WhitelistedIP, error) {
 	var ips []*WhitelistedIP
-	_, err := db.dsClient.GetAll(ctx, datastore.NewQuery(IP_KIND), &ips)
+	var states []*StateField
+	nq := datastore.NewQuery(IP_KIND)
+	if db.namespace != "" {
+		nq = nq.Namespace(db.namespace)
+	}
+	_, err := db.dsClient.GetAll(ctx, nq, &states)
+	for _, state := range states {
+		ip, err := StateToWhitelistedIp(state)
+		if err != nil {
+			return nil, err
+		}
+		ips = append(ips, ip)
+	}
 	return ips, err
 }
 
 func (db *DBClient) SaveWhitelistedIp(ctx context.Context, whitelistedIp *WhitelistedIP) error {
-	_, err := db.dsClient.Put(ctx, db.whitelistedIpKey(whitelistedIp.IP), whitelistedIp)
+	sf, err := WhitelistedIpToState(whitelistedIp)
+	if err != nil {
+		return err
+	}
+	_, err = db.dsClient.Put(ctx, db.whitelistedIpKey(whitelistedIp.IP), sf)
 	return err
 }
 
 func (db *DBClient) DeleteWhitelistedIp(ctx context.Context, whitelistedIp *WhitelistedIP) error {
 	return db.dsClient.Delete(ctx, db.whitelistedIpKey(whitelistedIp.IP))
-}
-
-func (db *DBClient) GetAlert(ctx context.Context, alertId string) (*Alert, error) {
-	var alert Alert
-	err := db.dsClient.Get(ctx, db.alertKey(alertId), &alert)
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-	return &alert, nil
-}
-
-func (db *DBClient) UpdateAlert(ctx context.Context, alert *Alert, status string) error {
-	tx, err := db.dsClient.NewTransaction(ctx)
-	if err != nil {
-		log.Errorf("updateAlert: %v", err)
-		return err
-	}
-
-	found := false
-	for _, am := range alert.Metadata {
-		if am.Key == "status" {
-			am.Value = status
-			found = true
-		}
-	}
-	//handle case where there is no status
-	if !found {
-		alert.Metadata = append(alert.Metadata, AlertMeta{Key: "status", Value: status})
-	}
-
-	if _, err := tx.Put(db.alertKey(alert.Id), alert); err != nil {
-		log.Errorf("updateAlert tx.Put: %v", err)
-		return err
-	}
-	if _, err := tx.Commit(); err != nil {
-		log.Errorf("updateAlert tx.Commit: %v", err)
-		return err
-	}
-	return nil
 }
