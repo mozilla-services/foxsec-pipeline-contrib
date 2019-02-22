@@ -5,9 +5,9 @@ import (
 )
 
 type WhitelistedIP struct {
-	IP        string
-	ExpiresAt time.Time
-	CreatedBy string
+	IP        string    `json:"ip"`
+	ExpiresAt time.Time `json:"expires_at"`
+	CreatedBy string    `json:"created_by"`
 }
 
 func NewWhitelistedIP(ip string, expiresAt time.Time, createdBy string) *WhitelistedIP {

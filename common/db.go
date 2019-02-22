@@ -13,15 +13,16 @@ const (
 )
 
 type DBClient struct {
-	dsClient *datastore.Client
+	dsClient  *datastore.Client
+	namespace string
 }
 
-func NewDBClient(ctx context.Context, projectID string) (*DBClient, error) {
+func NewDBClient(ctx context.Context, projectID string, namespace string) (*DBClient, error) {
 	dsClient, err := datastore.NewClient(ctx, projectID)
 	if err != nil {
 		return nil, err
 	}
-	return &DBClient{dsClient}, nil
+	return &DBClient{dsClient, namespace}, nil
 }
 
 func (db *DBClient) Close() error {
@@ -29,11 +30,19 @@ func (db *DBClient) Close() error {
 }
 
 func (db *DBClient) whitelistedIpKey(ip string) *datastore.Key {
-	return datastore.NameKey(IP_KIND, ip, nil)
+	nk := datastore.NameKey(IP_KIND, ip, nil)
+	if db.namespace != "" {
+		nk.Namespace = db.namespace
+	}
+	return nk
 }
 
 func (db *DBClient) alertKey(alertId string) *datastore.Key {
-	return datastore.NameKey(ALERT_KIND, alertId, nil)
+	nk := datastore.NameKey(ALERT_KIND, alertId, nil)
+	if db.namespace != "" {
+		nk.Namespace = db.namespace
+	}
+	return nk
 }
 
 func (db *DBClient) RemoveExpiredWhitelistedIps(ctx context.Context) error {
