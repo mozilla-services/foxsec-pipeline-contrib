@@ -28,8 +28,9 @@ var (
 )
 
 const (
-	EMAIL_CHAR_SET             = "UTF-8"
-	WHITELIST_IP_SLASH_COMMAND = "/whitelist_ip"
+	EMAIL_CHAR_SET              = "UTF-8"
+	WHITELIST_IP_SLASH_COMMAND  = "/whitelist_ip"
+	DEFAULT_EXPIRATION_DURATION = time.Hour * 24
 )
 
 func init() {
@@ -72,24 +73,42 @@ func InitConfig() {
 	globalConfig.slackClient = slack.New(globalConfig.slackAuthToken)
 }
 
-func handleWhitelistCmd(ctx context.Context, cmd slack.SlashCommand, db *common.DBClient) (*slack.Msg, error) {
-	msg := &slack.Msg{}
+func parseCommandText(text string) (net.IP, time.Time, string, error) {
+	splitCmd := strings.Split(text, " ")
 
-	splitCmd := strings.Split(cmd.Text, " ")
 	ip := net.ParseIP(splitCmd[0])
 	if ip == nil {
 		m := fmt.Sprintf("Got invalid IP: %s", splitCmd[0])
-		msg.Text = m
-		return msg, errors.New(m)
+		errMsg := m
+		return net.IP{}, time.Time{}, errMsg, errors.New(m)
 	}
 
-	expiresDur, err := time.ParseDuration(splitCmd[1])
+	var expiresDur time.Duration
+	var err error
+	if len(splitCmd) == 2 {
+		expiresDur, err = time.ParseDuration(splitCmd[1])
+		if err != nil {
+			log.Errorf("Error parsing duration: %s", err)
+			errMsg := "Was unable to correctly parse duration"
+			return net.IP{}, time.Time{}, errMsg, err
+		}
+	} else {
+		expiresDur = DEFAULT_EXPIRATION_DURATION
+	}
+
+	expiresAt := time.Now().Add(expiresDur)
+
+	return ip, expiresAt, "", nil
+}
+
+func handleWhitelistCmd(ctx context.Context, cmd slack.SlashCommand, db *common.DBClient) (*slack.Msg, error) {
+	msg := &slack.Msg{}
+
+	ip, expiresAt, errMsg, err := parseCommandText(cmd.Text)
 	if err != nil {
-		log.Errorf("Error parsing duration: %s", err)
-		msg.Text = "Was unable to correctly parse duration"
+		msg.Text = errMsg
 		return msg, err
 	}
-	expiresAt := time.Now().Add(expiresDur)
 
 	userProfile, err := globalConfig.slackClient.GetUserProfile(cmd.UserID, false)
 	if err != nil {
@@ -161,7 +180,7 @@ func FoxsecSlackBot(w http.ResponseWriter, r *http.Request) {
 	log.Debug("Slack signature verified")
 
 	log.Debug("Creating db client")
-	db, err := common.NewDBClient(r.Context(), PROJECT_ID, "")
+	db, err := common.NewDBClient(r.Context(), PROJECT_ID)
 	if err != nil {
 		log.Errorf("Error creating db client: %s", err)
 		return
