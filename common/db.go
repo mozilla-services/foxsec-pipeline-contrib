@@ -25,7 +25,7 @@ func NewDBClient(ctx context.Context, projectID string) (*DBClient, error) {
 }
 
 type StateField struct {
-	State string `json:"state"`
+	State string `datastore:"state" json:"state"`
 }
 
 func WhitelistedIpToState(wip *WhitelistedIP) (*StateField, error) {
