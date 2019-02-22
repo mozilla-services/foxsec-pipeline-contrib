@@ -161,7 +161,7 @@ func FoxsecSlackBot(w http.ResponseWriter, r *http.Request) {
 	log.Debug("Slack signature verified")
 
 	log.Debug("Creating db client")
-	db, err := common.NewDBClient(r.Context(), PROJECT_ID)
+	db, err := common.NewDBClient(r.Context(), PROJECT_ID, "")
 	if err != nil {
 		log.Errorf("Error creating db client: %s", err)
 		return
