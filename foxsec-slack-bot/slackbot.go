@@ -31,12 +31,13 @@ const (
 	EMAIL_CHAR_SET              = "UTF-8"
 	WHITELIST_IP_SLASH_COMMAND  = "/whitelist_ip"
 	DEFAULT_EXPIRATION_DURATION = time.Hour * 24
+	DURATION_DOC                = "FoxsecBot uses Go's time.ParseDuration internally " +
+		"with some custom checks. Examples: '72h' or '2h45m'. " +
+		"Valid time units are 'm' and 'h'. If you omit a duration, " +
+		"the default (24 hours) is used. If your duration is under 5 minutes, it is increased to 5 minutes."
 )
 
 func init() {
-	// TODO - Set as option
-	log.SetLevel(log.DebugLevel)
-
 	mozlogrus.Enable("foxsec-slack-bot")
 	client = &http.Client{
 		Timeout: 10 * time.Second,
@@ -89,8 +90,12 @@ func parseCommandText(text string) (net.IP, time.Time, string, error) {
 		expiresDur, err = time.ParseDuration(splitCmd[1])
 		if err != nil {
 			log.Errorf("Error parsing duration: %s", err)
-			errMsg := "Was unable to correctly parse duration"
+			errMsg := fmt.Sprintf("Was unable to parse duration: %s\n%s", splitCmd[1], DURATION_DOC)
 			return net.IP{}, time.Time{}, errMsg, err
+		}
+		// Clamp expires duration to >5 minutes
+		if expiresDur < time.Minute*5 {
+			expiresDur = time.Minute * 5
 		}
 	} else {
 		expiresDur = DEFAULT_EXPIRATION_DURATION
@@ -120,7 +125,7 @@ func handleWhitelistCmd(ctx context.Context, cmd slack.SlashCommand, db *common.
 	err = db.SaveWhitelistedIp(ctx, common.NewWhitelistedIP(ip.String(), expiresAt, userProfile.Email))
 	if err != nil {
 		log.Errorf("Error saving whitelisted ip: %s", err)
-		msg.Text = "Error saving IP to whitelist"
+		msg.Text = "Error saving IP to whitelist."
 		return msg, err
 	}
 
@@ -171,37 +176,32 @@ func verifySignature(r *http.Request) error {
 func FoxsecSlackBot(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
-	log.Debug("Verifying slack signature")
 	err := verifySignature(r)
 	if err != nil {
 		log.Errorf("Error verifying signature: %s", err)
 		return
 	}
-	log.Debug("Slack signature verified")
 
-	log.Debug("Creating db client")
 	db, err := common.NewDBClient(r.Context(), PROJECT_ID)
 	if err != nil {
 		log.Errorf("Error creating db client: %s", err)
 		return
 	}
 	defer db.Close()
-	log.Debug("db client created")
 
 	if cmd, err := slack.SlashCommandParse(r); err == nil {
-		log.Debug("Slash command parsed")
 		log.Infof("Command: %s", cmd.Command)
 		if cmd.Command == WHITELIST_IP_SLASH_COMMAND {
-			log.Debug("Handling whitelist ip command")
 			resp, err := handleWhitelistCmd(r.Context(), cmd, db)
 			if err != nil {
 				log.Errorf("error handling whitelist command: %s", err)
-				return
 			}
-			err = sendSlackCallback(resp, cmd.ResponseURL)
-			if err != nil {
-				log.Errorf("error sending slack callback within slash command: %s", err)
-				return
+			if resp != nil {
+				err = sendSlackCallback(resp, cmd.ResponseURL)
+				if err != nil {
+					log.Errorf("error sending slack callback within slash command: %s", err)
+					return
+				}
 			}
 		}
 	}
