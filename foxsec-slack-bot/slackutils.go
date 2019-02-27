@@ -66,7 +66,7 @@ func handleWhitelistCmd(ctx context.Context, cmd slack.SlashCommand, db *common.
 		return msg, err
 	}
 
-	auditMsg := fmt.Sprintf("%s submitted %s to be whitelisted until %s", userProfile.Email, ip.String(), expiresAt)
+	auditMsg := fmt.Sprintf("%s submitted %s to be whitelisted until %s", userProfile.Email, ip.String(), expiresAt.Format(time.UnixDate))
 	log.Info(auditMsg)
 	err = db.SaveWhitelistedIp(ctx, common.NewWhitelistedIP(ip.String(), expiresAt, userProfile.Email))
 	if err != nil {
