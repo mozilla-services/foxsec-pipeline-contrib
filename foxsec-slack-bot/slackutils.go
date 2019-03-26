@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -18,7 +19,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var rxEmail = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
+
 func checkUsersGroups(email string) (bool, error) {
+	if len(email) > 254 || !rxEmail.MatchString(email) {
+		return false, fmt.Errorf("Email (%s) is invalid", email)
+	}
+
 	person, err := globalConfig.personsClient.GetPersonByEmail(email)
 	if err != nil {
 		return false, err
