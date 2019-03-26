@@ -18,6 +18,23 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+func checkUsersGroups(email string) (bool, error) {
+	person, err := globalConfig.personsClient.GetPersonByEmail(email)
+	if err != nil {
+		return false, err
+	}
+
+	for group := range person.AccessInformation.LDAP.Values {
+		for _, allowedGroup := range globalConfig.allowedGroups {
+			if group == allowedGroup {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
+}
+
 func parseCommandText(text string) (net.IP, time.Time, string, error) {
 	splitCmd := strings.Split(text, " ")
 
@@ -63,6 +80,19 @@ func handleWhitelistCmd(ctx context.Context, cmd slack.SlashCommand, db *common.
 	if err != nil {
 		log.Errorf("Error getting user profile: %s", err)
 		msg.Text = "Was unable to get your email from Slack."
+		return msg, err
+	}
+
+	allowed, err := checkUsersGroups(userProfile.Email)
+	if err != nil {
+		log.Errorf("Error with checking user's (%s) ldap groups: %s", userProfile.Email, err)
+		msg.Text = "Error checking your ldap groups."
+		return msg, err
+	}
+	if !allowed {
+		err = fmt.Errorf("User (%s) is not allowed to use this slack command.", userProfile.Email)
+		log.Error(err)
+		msg.Text = "You are not authorized to perform that command."
 		return msg, err
 	}
 

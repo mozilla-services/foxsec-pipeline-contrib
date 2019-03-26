@@ -3,9 +3,11 @@ package foxsecslackbot
 import (
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/mozilla-services/foxsec-pipeline-contrib/common"
+	"github.com/mozilla-services/foxsec-pipeline-contrib/common/persons_api"
 
 	"github.com/nlopes/slack"
 	log "github.com/sirupsen/logrus"
@@ -45,9 +47,13 @@ func init() {
 }
 
 type Config struct {
-	slackSigningSecret string
-	slackAuthToken     string
-	slackClient        *slack.Client
+	slackSigningSecret  string
+	slackAuthToken      string
+	slackClient         *slack.Client
+	personsClientId     string
+	personsClientSecret string
+	personsClient       *persons_api.Client
+	allowedGroups       []string
 }
 
 func InitConfig() {
@@ -69,6 +75,28 @@ func InitConfig() {
 	}
 
 	globalConfig.slackClient = slack.New(globalConfig.slackAuthToken)
+
+	globalConfig.personsClientId, err = kms.DecryptEnvVar(KEYNAME, "PERSONS_CLIENT_ID")
+	if err != nil {
+		log.Fatalf("Could not decrypt persons client id. Err: %s", err)
+	}
+
+	globalConfig.personsClientSecret, err = kms.DecryptEnvVar(KEYNAME, "PERSONS_CLIENT_SECRET")
+	if err != nil {
+		log.Fatalf("Could not decrypt persons client secret. Err: %s", err)
+	}
+
+	globalConfig.personsClient, err = persons_api.NewClient(
+		globalConfig.personsClientId,
+		globalConfig.personsClientSecret,
+		os.Getenv("PERSONS_BASE_URL"),
+		os.Getenv("PERSONS_AUTH0_URL"),
+	)
+	if err != nil {
+		log.Fatalf("Could not create persons api client: %s", err)
+	}
+
+	globalConfig.allowedGroups = strings.Split(os.Getenv("ALLOWED_LDAP_GROUPS"), ",")
 }
 
 func FoxsecSlackBot(w http.ResponseWriter, r *http.Request) {
