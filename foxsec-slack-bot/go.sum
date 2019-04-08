@@ -60,6 +60,8 @@ github.com/matttproud/golang_protobuf_extensions v1.0.1/go.mod h1:D8He9yQNgCq6Z5
 github.com/microcosm-cc/bluemonday v1.0.1/go.mod h1:hsXNsILzKxV+sX77C5b8FSuKF00vh2OMYv+xgHpAMF4=
 github.com/mozilla-services/foxsec-pipeline-contrib v0.0.0-20190222235941-fd054c98f0b1 h1:qLffvTBmc8Hg1BdZ2/BDHzLsCfrlRmXVIiC0y19sLgg=
 github.com/mozilla-services/foxsec-pipeline-contrib v0.0.0-20190222235941-fd054c98f0b1/go.mod h1:rNuiuSF+Mvo60Lk9dSqDlY//wG+cccacGSqkf1sQ+hA=
+github.com/mozilla-services/foxsec-pipeline-contrib v0.0.0-20190326204815-5ba8ada479e9 h1:70Ftt9wo+LqjIeEaaU2aF8vhnlLiTUHuntK+A76byUI=
+github.com/mozilla-services/foxsec-pipeline-contrib v0.0.0-20190326204815-5ba8ada479e9/go.mod h1:rNuiuSF+Mvo60Lk9dSqDlY//wG+cccacGSqkf1sQ+hA=
 github.com/neelance/astrewrite v0.0.0-20160511093645-99348263ae86/go.mod h1:kHJEU3ofeGjhHklVoIGuVj85JJwZ6kWPaJwCIxgnFmo=
 github.com/neelance/sourcemap v0.0.0-20151028013722-8c68805598ab/go.mod h1:Qr6/a/Q4r9LP1IltGz7tA7iOK1WonHEYhu1HRBA7ZiM=
 github.com/nlopes/slack v0.5.0 h1:NbIae8Kd0NpqaEI3iUrsuS0KbcEDhzhc939jLW5fNm0=
