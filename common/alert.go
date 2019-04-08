@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+const (
+	ALERT_NEW          = "NEW"
+	ALERT_ACKNOWLEDGED = "ACKLNOWLEDGED"
+	ALERT_ESCALATED    = "ESCALATED"
+)
+
 type Alert struct {
 	Id        string      `json:"id"`
 	Severity  string      `json:"severity"`
@@ -25,6 +31,19 @@ func (a *Alert) PrettyPrint() string {
 	Metadata: %v
 	Id: %s`,
 		a.Summary, a.Severity, a.Category, a.Timestamp, a.Payload, a.Metadata, a.Id)
+}
+
+func (a *Alert) OlderThan(dur time.Duration) bool {
+	return a.Timestamp.Add(dur).Before(time.Now())
+}
+
+func (a *Alert) IsStatus(s string) bool {
+	for _, am := range a.Metadata {
+		if am.Key == "status" {
+			return am.Value == s
+		}
+	}
+	return false
 }
 
 type AlertMeta struct {

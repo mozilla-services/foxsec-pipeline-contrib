@@ -1,0 +1,82 @@
+package purger
+
+import (
+	"net/http"
+	"os"
+	"time"
+
+	"github.com/mozilla-services/foxsec-pipeline-contrib/common"
+
+	log "github.com/sirupsen/logrus"
+	"go.mozilla.org/mozlogrus"
+)
+
+var (
+	PROJECT_ID                    string
+	ALERT_ESCALATION_TTL          time.Duration
+	ALERT_ESCALATION_EMAIL_FORMAT string
+	SESCLIENT                     *common.SESClient
+)
+
+func init() {
+	mozlogrus.Enable("escalator")
+	PROJECT_ID = os.Getenv("GCP_PROJECT")
+	KEYNAME := os.Getenv("KMS_KEYNAME")
+
+	ALERT_ESCALATION_TTL, err := time.ParseDuration(os.Getenv("ALERT_ESCALATION_TTL"))
+	if err != nil {
+		log.Fatalf("Failed to parse alert escalation ttl: %s | Err: %s", os.Getenv("ALERT_ESCALATION_TTL"), err)
+	}
+
+	kms, err := common.NewKMSClient()
+	if err != nil {
+		log.Fatalf("Could not create kms client. Err: %s", err)
+	}
+	accessKeyId, err := kms.DecryptEnvVar(KEYNAME, "AWS_ACCESS_KEY_ID")
+	if err != nil {
+		log.Fatalf("Could not decrypt aws access key. Err: %s", err)
+	}
+	secretAccessKey, err := kms.DecryptEnvVar(KEYNAME, "AWS_SECRET_ACCESS_KEY")
+	if err != nil {
+		log.Fatalf("Could not decrypt aws secret access key. Err: %s", err)
+	}
+
+	SESCLIENT, err = common.NewSESClient(os.Getenv("AWS_REGION"), accessKeyId, secretAccessKey, os.Getenv("SES_SENDER_EMAIL"), os.Getenv("ESCALATION_EMAIL"))
+	if err != nil {
+		log.Fatalf("Could not setup SESClient. Err: %s", err)
+	}
+}
+
+func Escalator(w http.ResponseWriter, r *http.Request) {
+	log.Debug("Creating db client")
+	db, err := common.NewDBClient(r.Context(), PROJECT_ID)
+	if err != nil {
+		log.Errorf("Error creating db client: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+	log.Debug("db client created")
+
+	alerts, err := db.GetAllAlerts(r.Context())
+	if err != nil {
+		log.Errorf("Error getting all alerts: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	for _, alert := range alerts {
+		if alert.IsStatus(common.ALERT_NEW) && alert.OlderThan(ALERT_ESCALATION_TTL) {
+			err := SESCLIENT.SendEscalationEmail(alert)
+			if err != nil {
+				log.Error(err)
+			}
+			err = db.UpdateAlert(r.Context(), alert, common.ALERT_ESCALATED)
+			if err != nil {
+				log.Error(err)
+			}
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
+}

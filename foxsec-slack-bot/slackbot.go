@@ -54,6 +54,7 @@ type Config struct {
 	personsClientSecret string
 	personsClient       *persons_api.Client
 	allowedGroups       []string
+	sesClient           *common.SESClient
 }
 
 func InitConfig() {
@@ -62,7 +63,20 @@ func InitConfig() {
 		log.Fatalf("Could not create kms client. Err: %s", err)
 	}
 
-	log.Infof("Decrypting with key: %s", KEYNAME)
+	accessKeyId, err = kms.DecryptEnvVar(KEYNAME, "AWS_ACCESS_KEY_ID")
+	if err != nil {
+		log.Fatalf("Could not decrypt aws access key. Err: %s", err)
+	}
+
+	secretAccessKey, err = kms.DecryptEnvVar(KEYNAME, "AWS_SECRET_ACCESS_KEY")
+	if err != nil {
+		log.Fatalf("Could not decrypt aws secret access key. Err: %s", err)
+	}
+
+	globalConfig.sesClient, err = common.NewSESClient(os.Getenv("AWS_REGION"), accessKeyId, secretAccessKey, os.Getenv("SES_SENDER_EMAIL"), os.Getenv("ESCALATION_EMAIL"))
+	if err != nil {
+		log.Fatalf("Could not setup SESClient. Err: %s", err)
+	}
 
 	globalConfig.slackSigningSecret, err = kms.DecryptEnvVar(KEYNAME, "SLACK_SIGNING_SECRET")
 	if err != nil {
@@ -121,6 +135,20 @@ func FoxsecSlackBot(w http.ResponseWriter, r *http.Request) {
 			resp, err := handleWhitelistCmd(r.Context(), cmd, db)
 			if err != nil {
 				log.Errorf("error handling whitelist command: %s", err)
+			}
+			if resp != nil {
+				err = sendSlackCallback(resp, cmd.ResponseURL)
+				if err != nil {
+					log.Errorf("error sending slack callback within slash command: %s", err)
+					return
+				}
+			}
+		}
+	} else if callback, err := InteractionCallbackParse(r); err == nil {
+		if isAlertConfirm(callback) {
+			resp, err := handleAlertConfirm(r.Context(), callback, db)
+			if err != nil {
+				log.Error(err.Error())
 			}
 			if resp != nil {
 				err = sendSlackCallback(resp, cmd.ResponseURL)

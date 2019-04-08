@@ -161,3 +161,57 @@ func verifySignature(r *http.Request) error {
 
 	return nil
 }
+
+func InteractionCallbackParse(r *http.Request) (*slack.InteractionCallback, error) {
+	// TODO: May want to move into FoxsecSlackBot()
+	buf, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Error(err.Error())
+		return nil, err
+	}
+	var req slack.InteractionCallback
+	err = json.Unmarshal(buf, &req)
+	if err != nil {
+		log.Error(err.Error())
+		return nil, err
+	}
+	return &req, nil
+}
+
+func isAlertConfirm(req *slack.InteractionCallback) bool {
+	if strings.HasPrefix(req.CallbackID, "alert_confirmation") {
+		return true
+	}
+
+	return false
+}
+
+func handleAlertConfirm(ctx context.Context, callback *slack.InteractionCallback, db *common.DBClient) (*slack.Msg, error) {
+	alertId := strings.Split(callback.CallbackID, "_")[1]
+	alert, err := db.GetAlert(ctx, alertId)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	response := "Error responding; please contact SecOps (secops@mozilla.com)"
+	if callback.Actions[0].Name == "alert_yes" {
+		err := db.UpdateAlert(ctx, alert, common.ALERT_ACKNOWLEDGED)
+		if err != nil {
+			log.Error(err)
+		}
+		response = "Thank you for responding! Alert acknowledged"
+	} else if callback.Actions[0].Name == "alert_no" {
+		err := globalConfig.sesClient.SendEscalationEmail(alert)
+		if err != nil {
+			log.Error(err)
+		}
+		err = db.UpdateAlert(ctx, alert, common.ALERT_ESCALATED)
+		if err != nil {
+			log.Error(err)
+		}
+		response = "Thank you for responding! Alert has been escalated to SecOps (secops@mozilla.com)"
+	}
+
+	return &slack.Msg{Text: response, ReplaceOriginal: false}, nil
+}
