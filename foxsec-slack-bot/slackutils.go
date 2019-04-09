@@ -199,16 +199,17 @@ func handleAlertConfirm(ctx context.Context, callback *slack.InteractionCallback
 		err := db.UpdateAlert(ctx, alert, common.ALERT_ACKNOWLEDGED)
 		if err != nil {
 			log.Error(err)
+			return nil, err
 		}
 		response = "Thank you for responding! Alert acknowledged"
 	} else if callback.Actions[0].Name == "alert_no" {
 		err := globalConfig.sesClient.SendEscalationEmail(alert)
 		if err != nil {
-			log.Error(err)
+			log.Errorf("Error escalating alert (%s). Err: %s", alert.Id, err)
 		}
 		err = db.UpdateAlert(ctx, alert, common.ALERT_ESCALATED)
 		if err != nil {
-			log.Error(err)
+			log.Errorf("Error updating alert as escalated (%s). Err: %s", alert.Id, err)
 		}
 		response = "Thank you for responding! Alert has been escalated to SecOps (secops@mozilla.com)"
 	}

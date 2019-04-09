@@ -63,12 +63,12 @@ func InitConfig() {
 		log.Fatalf("Could not create kms client. Err: %s", err)
 	}
 
-	accessKeyId, err = kms.DecryptEnvVar(KEYNAME, "AWS_ACCESS_KEY_ID")
+	accessKeyId, err := kms.DecryptEnvVar(KEYNAME, "AWS_ACCESS_KEY_ID")
 	if err != nil {
 		log.Fatalf("Could not decrypt aws access key. Err: %s", err)
 	}
 
-	secretAccessKey, err = kms.DecryptEnvVar(KEYNAME, "AWS_SECRET_ACCESS_KEY")
+	secretAccessKey, err := kms.DecryptEnvVar(KEYNAME, "AWS_SECRET_ACCESS_KEY")
 	if err != nil {
 		log.Fatalf("Could not decrypt aws secret access key. Err: %s", err)
 	}

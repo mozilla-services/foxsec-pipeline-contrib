@@ -12,10 +12,9 @@ import (
 )
 
 var (
-	PROJECT_ID                    string
-	ALERT_ESCALATION_TTL          time.Duration
-	ALERT_ESCALATION_EMAIL_FORMAT string
-	SESCLIENT                     *common.SESClient
+	PROJECT_ID           string
+	ALERT_ESCALATION_TTL time.Duration
+	SESCLIENT            *common.SESClient
 )
 
 func init() {
@@ -23,7 +22,9 @@ func init() {
 	PROJECT_ID = os.Getenv("GCP_PROJECT")
 	KEYNAME := os.Getenv("KMS_KEYNAME")
 
-	ALERT_ESCALATION_TTL, err := time.ParseDuration(os.Getenv("ALERT_ESCALATION_TTL"))
+	var err error
+
+	ALERT_ESCALATION_TTL, err = time.ParseDuration(os.Getenv("ALERT_ESCALATION_TTL"))
 	if err != nil {
 		log.Fatalf("Failed to parse alert escalation ttl: %s | Err: %s", os.Getenv("ALERT_ESCALATION_TTL"), err)
 	}
@@ -48,7 +49,7 @@ func init() {
 }
 
 func Escalator(w http.ResponseWriter, r *http.Request) {
-	log.Debug("Creating db client")
+	log.Info("Running Escalator func")
 	db, err := common.NewDBClient(r.Context(), PROJECT_ID)
 	if err != nil {
 		log.Errorf("Error creating db client: %s", err)
@@ -56,7 +57,6 @@ func Escalator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer db.Close()
-	log.Debug("db client created")
 
 	alerts, err := db.GetAllAlerts(r.Context())
 	if err != nil {
@@ -67,16 +67,22 @@ func Escalator(w http.ResponseWriter, r *http.Request) {
 
 	for _, alert := range alerts {
 		if alert.IsStatus(common.ALERT_NEW) && alert.OlderThan(ALERT_ESCALATION_TTL) {
+			returnEarly := false
 			err := SESCLIENT.SendEscalationEmail(alert)
 			if err != nil {
-				log.Error(err)
+				log.Errorf("Error escalating alert (%s). Err: %s", alert.Id, err)
+				returnEarly = true
 			}
 			err = db.UpdateAlert(r.Context(), alert, common.ALERT_ESCALATED)
 			if err != nil {
-				log.Error(err)
+				log.Errorf("Error updating alert as escalated (%s). Err: %s", alert.Id, err)
+				returnEarly = true
+			}
+			if returnEarly {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
 			}
 		}
 	}
-
 	w.WriteHeader(http.StatusOK)
 }
