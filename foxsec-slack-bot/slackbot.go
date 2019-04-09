@@ -1,6 +1,7 @@
 package foxsecslackbot
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"strings"
@@ -20,6 +21,7 @@ var (
 	KEYNAME                 string
 	PROJECT_ID              string
 	FOXSEC_SLACK_CHANNEL_ID string
+	DB                      *common.DBClient
 )
 
 const (
@@ -44,6 +46,13 @@ func init() {
 		log.Fatal("Could not find FOXSEC_SLACK_CHANNEL_ID env var")
 	}
 	InitConfig()
+
+	var err error
+	DB, err = common.NewDBClient(context.Background(), PROJECT_ID)
+	if err != nil {
+		log.Errorf("Error creating db client: %s", err)
+		return
+	}
 }
 
 type Config struct {
@@ -122,17 +131,10 @@ func FoxsecSlackBot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db, err := common.NewDBClient(r.Context(), PROJECT_ID)
-	if err != nil {
-		log.Errorf("Error creating db client: %s", err)
-		return
-	}
-	defer db.Close()
-
 	if cmd, err := slack.SlashCommandParse(r); err == nil {
 		log.Infof("Command: %s", cmd.Command)
 		if cmd.Command == WHITELIST_IP_SLASH_COMMAND {
-			resp, err := handleWhitelistCmd(r.Context(), cmd, db)
+			resp, err := handleWhitelistCmd(r.Context(), cmd, DB)
 			if err != nil {
 				log.Errorf("error handling whitelist command: %s", err)
 			}
@@ -146,7 +148,7 @@ func FoxsecSlackBot(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if callback, err := InteractionCallbackParse(r); err == nil {
 		if isAlertConfirm(callback) {
-			resp, err := handleAlertConfirm(r.Context(), callback, db)
+			resp, err := handleAlertConfirm(r.Context(), callback, DB)
 			if err != nil {
 				log.Error(err.Error())
 			}

@@ -1,6 +1,7 @@
 package purger
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"time"
@@ -15,6 +16,7 @@ var (
 	PROJECT_ID           string
 	ALERT_ESCALATION_TTL time.Duration
 	SESCLIENT            *common.SESClient
+	DB                   *common.DBClient
 )
 
 func init() {
@@ -46,19 +48,17 @@ func init() {
 	if err != nil {
 		log.Fatalf("Could not setup SESClient. Err: %s", err)
 	}
+
+	DB, err = common.NewDBClient(context.Background(), PROJECT_ID)
+	if err != nil {
+		log.Fatalf("Error creating db client: %s", err)
+	}
 }
 
 func Escalator(w http.ResponseWriter, r *http.Request) {
 	log.Info("Running Escalator func")
-	db, err := common.NewDBClient(r.Context(), PROJECT_ID)
-	if err != nil {
-		log.Errorf("Error creating db client: %s", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
 
-	alerts, err := db.GetAllAlerts(r.Context())
+	alerts, err := DB.GetAllAlerts(r.Context())
 	if err != nil {
 		log.Errorf("Error getting all alerts: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -73,7 +73,7 @@ func Escalator(w http.ResponseWriter, r *http.Request) {
 				log.Errorf("Error escalating alert (%s). Err: %s", alert.Id, err)
 				returnEarly = true
 			}
-			err = db.UpdateAlert(r.Context(), alert, common.ALERT_ESCALATED)
+			err = DB.UpdateAlert(r.Context(), alert, common.ALERT_ESCALATED)
 			if err != nil {
 				log.Errorf("Error updating alert as escalated (%s). Err: %s", alert.Id, err)
 				returnEarly = true

@@ -59,6 +59,8 @@ github.com/microcosm-cc/bluemonday v1.0.1/go.mod h1:hsXNsILzKxV+sX77C5b8FSuKF00v
 github.com/mozilla-services/foxsec-pipeline-contrib v0.0.0-20190222235941-fd054c98f0b1/go.mod h1:rNuiuSF+Mvo60Lk9dSqDlY//wG+cccacGSqkf1sQ+hA=
 github.com/mozilla-services/foxsec-pipeline-contrib/foxsec-slack-bot v0.0.0-20190326204815-5ba8ada479e9 h1:e/b1Dt3+S9PFE6rAW7mU9DvP6BNYTnigzsqXOw+5Jmo=
 github.com/mozilla-services/foxsec-pipeline-contrib/foxsec-slack-bot v0.0.0-20190326204815-5ba8ada479e9/go.mod h1:OZUCjOaglCNHkIJy2452aY3pm7bgeBooVaDAH9+1nzo=
+github.com/mozilla-services/foxsec-pipeline-contrib/scheduled-tasks/whitelisted-ips-purger v0.0.0-20190409172407-29117fc6a2f6 h1:6CCuHHVrbavhuaoPxq6BP58B6hn2Th6CLQXoURATBZo=
+github.com/mozilla-services/foxsec-pipeline-contrib/scheduled-tasks/whitelisted-ips-purger v0.0.0-20190409172407-29117fc6a2f6/go.mod h1:CSwIQM5ScA8T6/vWKzJmjxtkHEbzQ3TfTBouFDJP/i0=
 github.com/neelance/astrewrite v0.0.0-20160511093645-99348263ae86/go.mod h1:kHJEU3ofeGjhHklVoIGuVj85JJwZ6kWPaJwCIxgnFmo=
 github.com/neelance/sourcemap v0.0.0-20151028013722-8c68805598ab/go.mod h1:Qr6/a/Q4r9LP1IltGz7tA7iOK1WonHEYhu1HRBA7ZiM=
 github.com/nlopes/slack v0.5.0 h1:NbIae8Kd0NpqaEI3iUrsuS0KbcEDhzhc939jLW5fNm0=
