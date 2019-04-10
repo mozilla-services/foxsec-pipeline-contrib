@@ -125,12 +125,16 @@ func AlertToState(a *Alert) (*StateField, error) {
 }
 
 func (db *DBClient) GetAlert(ctx context.Context, alertId string) (*Alert, error) {
-	var alert Alert
-	err := db.dsClient.Get(ctx, db.alertKey(alertId), &alert)
+	var sf StateField
+	err := db.dsClient.Get(ctx, db.alertKey(alertId), &sf)
 	if err != nil {
 		return nil, err
 	}
-	return &alert, nil
+	alert, err := StateToAlert(&sf)
+	if err != nil {
+		return nil, err
+	}
+	return alert, nil
 }
 
 func (db *DBClient) GetAllAlerts(ctx context.Context) ([]*Alert, error) {

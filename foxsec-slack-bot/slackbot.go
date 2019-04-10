@@ -1,7 +1,9 @@
 package foxsecslackbot
 
 import (
+	"bytes"
 	"context"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
@@ -132,7 +134,15 @@ func FoxsecSlackBot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if cmd, err := slack.SlashCommandParse(r); err == nil {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Errorf("Error reading body: %v", err)
+	}
+
+	// And now set a new body, which will simulate the same data we read:
+	r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+
+	if cmd, err := slack.SlashCommandParse(r); err == nil && cmd.Command != "" {
 		log.Infof("Command: %s", cmd.Command)
 		if cmd.Command == WHITELIST_IP_SLASH_COMMAND || cmd.Command == STAGING_WHITELIST_IP_SLASH_COMMAND {
 			resp, err := handleWhitelistCmd(r.Context(), cmd, DB)
@@ -147,16 +157,16 @@ func FoxsecSlackBot(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-	} else if callback, err := InteractionCallbackParse(r); err == nil {
+	} else if callback, err := InteractionCallbackParse(body); err == nil {
 		if isAlertConfirm(callback) {
 			resp, err := handleAlertConfirm(r.Context(), callback, DB)
 			if err != nil {
-				log.Error(err.Error())
+				log.Errorf("Error handling alert confirmation interaction: %s", err)
 			}
 			if resp != nil {
-				err = sendSlackCallback(resp, cmd.ResponseURL)
+				err = sendSlackCallback(resp, callback.ResponseURL)
 				if err != nil {
-					log.Errorf("error sending slack callback within slash command: %s", err)
+					log.Errorf("error sending slack callback for interaction: %s", err)
 					return
 				}
 			}

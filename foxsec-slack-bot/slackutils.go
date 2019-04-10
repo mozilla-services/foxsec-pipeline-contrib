@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -162,17 +163,13 @@ func verifySignature(r *http.Request) error {
 	return nil
 }
 
-func InteractionCallbackParse(r *http.Request) (*slack.InteractionCallback, error) {
-	// TODO: May want to move into FoxsecSlackBot()
-	buf, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		log.Error(err.Error())
-		return nil, err
-	}
+func InteractionCallbackParse(reqBody []byte) (*slack.InteractionCallback, error) {
 	var req slack.InteractionCallback
-	err = json.Unmarshal(buf, &req)
+	// Deal with slack weirdness. Body is `payload=<escaped json>`
+	jsonStr, err := url.QueryUnescape(string(reqBody)[8:])
+	err = json.Unmarshal([]byte(jsonStr), &req)
 	if err != nil {
-		log.Error(err.Error())
+		log.Errorf("Error parsing interaction callback: Body: %s | Err: %s", reqBody, err)
 		return nil, err
 	}
 	return &req, nil
@@ -187,7 +184,8 @@ func isAlertConfirm(req *slack.InteractionCallback) bool {
 }
 
 func handleAlertConfirm(ctx context.Context, callback *slack.InteractionCallback, db *common.DBClient) (*slack.Msg, error) {
-	alertId := strings.Split(callback.CallbackID, "_")[1]
+	// callback id = "alert_confirmation_<id>"
+	alertId := strings.Split(callback.CallbackID, "_")[2]
 	alert, err := db.GetAlert(ctx, alertId)
 	if err != nil {
 		log.Error(err)
@@ -198,7 +196,7 @@ func handleAlertConfirm(ctx context.Context, callback *slack.InteractionCallback
 	if callback.Actions[0].Name == "alert_yes" {
 		err := db.UpdateAlert(ctx, alert, common.ALERT_ACKNOWLEDGED)
 		if err != nil {
-			log.Error(err)
+			log.Errorf("Error marking alert (%s) as acknowledged. Err: %s", alert.Id, err)
 			return nil, err
 		}
 		response = "Thank you for responding! Alert acknowledged"
