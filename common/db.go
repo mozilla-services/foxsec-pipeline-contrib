@@ -152,22 +152,10 @@ func (db *DBClient) GetAllAlerts(ctx context.Context) ([]*Alert, error) {
 	return alerts, err
 }
 
-func (db *DBClient) UpdateAlert(ctx context.Context, alert *Alert, status string) error {
+func (db *DBClient) UpdateAlert(ctx context.Context, alert *Alert) error {
 	tx, err := db.dsClient.NewTransaction(ctx)
 	if err != nil {
 		return err
-	}
-
-	found := false
-	for _, am := range alert.Metadata {
-		if am.Key == "status" {
-			am.Value = status
-			found = true
-		}
-	}
-	//handle case where there is no status
-	if !found {
-		alert.Metadata = append(alert.Metadata, AlertMeta{Key: "status", Value: status})
 	}
 
 	sf, err := AlertToState(alert)

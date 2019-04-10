@@ -69,17 +69,20 @@ func Escalator(w http.ResponseWriter, r *http.Request) {
 		log.Infof("Check alert %s", alert.Id)
 		if alert.IsStatus(common.ALERT_NEW) && alert.OlderThan(ALERT_ESCALATION_TTL) {
 			log.Infof("Escalating alert %s", alert.Id)
+			alert.SetMetadata("status", common.ALERT_ESCALATED)
+
 			returnEarly := false
 			err := SESCLIENT.SendEscalationEmail(alert)
 			if err != nil {
 				log.Errorf("Error escalating alert (%s). Err: %s", alert.Id, err)
 				returnEarly = true
 			}
-			err = DB.UpdateAlert(r.Context(), alert, common.ALERT_ESCALATED)
+			err = DB.UpdateAlert(r.Context(), alert)
 			if err != nil {
 				log.Errorf("Error updating alert as escalated (%s). Err: %s", alert.Id, err)
 				returnEarly = true
 			}
+
 			if returnEarly {
 				w.WriteHeader(http.StatusInternalServerError)
 				return

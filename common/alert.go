@@ -12,13 +12,13 @@ const (
 )
 
 type Alert struct {
-	Id        string      `json:"id"`
-	Severity  string      `json:"severity"`
-	Category  string      `json:"category"`
-	Summary   string      `json:"summary"`
-	Payload   string      `json:"payload"`
-	Metadata  []AlertMeta `json:"metadata"`
-	Timestamp time.Time   `json:"timestamp"`
+	Id        string       `json:"id"`
+	Severity  string       `json:"severity"`
+	Category  string       `json:"category"`
+	Summary   string       `json:"summary"`
+	Payload   string       `json:"payload"`
+	Metadata  []*AlertMeta `json:"metadata"`
+	Timestamp time.Time    `json:"timestamp"`
 }
 
 func (a *Alert) PrettyPrint() string {
@@ -44,6 +44,25 @@ func (a *Alert) IsStatus(s string) bool {
 		}
 	}
 	return false
+}
+
+func (a *Alert) GetMetadata(key string) string {
+	for _, am := range a.Metadata {
+		if am.Key == key {
+			return am.Value
+		}
+	}
+	return ""
+}
+
+func (a *Alert) SetMetadata(key, value string) {
+	for _, am := range a.Metadata {
+		if am.Key == key {
+			am.Value = value
+			return
+		}
+	}
+	a.Metadata = append(a.Metadata, &AlertMeta{Key: key, Value: value})
 }
 
 type AlertMeta struct {
