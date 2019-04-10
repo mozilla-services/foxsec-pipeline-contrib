@@ -116,6 +116,14 @@ func StateToAlert(sf *StateField) (*Alert, error) {
 	return &alert, nil
 }
 
+func AlertToState(a *Alert) (*StateField, error) {
+	buf, err := json.Marshal(a)
+	if err != nil {
+		return nil, err
+	}
+	return &StateField{string(buf)}, nil
+}
+
 func (db *DBClient) GetAlert(ctx context.Context, alertId string) (*Alert, error) {
 	var alert Alert
 	err := db.dsClient.Get(ctx, db.alertKey(alertId), &alert)
@@ -158,7 +166,11 @@ func (db *DBClient) UpdateAlert(ctx context.Context, alert *Alert, status string
 		alert.Metadata = append(alert.Metadata, AlertMeta{Key: "status", Value: status})
 	}
 
-	if _, err := tx.Put(db.alertKey(alert.Id), alert); err != nil {
+	sf, err := AlertToState(alert)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Put(db.alertKey(alert.Id), sf); err != nil {
 		return err
 	}
 	if _, err := tx.Commit(); err != nil {

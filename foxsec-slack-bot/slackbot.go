@@ -25,10 +25,11 @@ var (
 )
 
 const (
-	EMAIL_CHAR_SET              = "UTF-8"
-	WHITELIST_IP_SLASH_COMMAND  = "/whitelist_ip"
-	DEFAULT_EXPIRATION_DURATION = time.Hour * 24
-	DURATION_DOC                = "FoxsecBot uses Go's time.ParseDuration internally " +
+	EMAIL_CHAR_SET                     = "UTF-8"
+	WHITELIST_IP_SLASH_COMMAND         = "/whitelist_ip"
+	STAGING_WHITELIST_IP_SLASH_COMMAND = "/staging_whitelist_ip"
+	DEFAULT_EXPIRATION_DURATION        = time.Hour * 24
+	DURATION_DOC                       = "FoxsecBot uses Go's time.ParseDuration internally " +
 		"with some custom checks. Examples: '72h' or '2h45m'. " +
 		"Valid time units are 'm' and 'h'. If you omit a duration, " +
 		"the default (24 hours) is used. If your duration is under 5 minutes, it is increased to 5 minutes."
@@ -133,7 +134,7 @@ func FoxsecSlackBot(w http.ResponseWriter, r *http.Request) {
 
 	if cmd, err := slack.SlashCommandParse(r); err == nil {
 		log.Infof("Command: %s", cmd.Command)
-		if cmd.Command == WHITELIST_IP_SLASH_COMMAND {
+		if cmd.Command == WHITELIST_IP_SLASH_COMMAND || cmd.Command == STAGING_WHITELIST_IP_SLASH_COMMAND {
 			resp, err := handleWhitelistCmd(r.Context(), cmd, DB)
 			if err != nil {
 				log.Errorf("error handling whitelist command: %s", err)
