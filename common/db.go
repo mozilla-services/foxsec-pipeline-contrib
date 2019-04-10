@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	ALERT_KIND      = "alert"
-	ALERT_NAMESPACE = "alert"
+	ALERT_KIND      = "alerts"
+	ALERT_NAMESPACE = "alerts"
 	IP_KIND         = "whitelisted_ip"
 	IP_NAMESPACE    = "whitelisted_ip"
 )
