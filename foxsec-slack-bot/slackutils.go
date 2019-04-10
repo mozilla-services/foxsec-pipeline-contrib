@@ -200,7 +200,7 @@ func handleAlertConfirm(ctx context.Context, callback *slack.InteractionCallback
 			log.Errorf("Error marking alert (%s) as acknowledged. Err: %s", alert.Id, err)
 			return nil, err
 		}
-		response = "Thank you for responding! Alert acknowledged"
+		response = fmt.Sprintf("Thank you for responding! Alert has been acknowledged.\nalert id: %s", alert.Id)
 	} else if callback.Actions[0].Name == "alert_no" {
 		err := globalConfig.sesClient.SendEscalationEmail(alert)
 		if err != nil {
@@ -211,8 +211,8 @@ func handleAlertConfirm(ctx context.Context, callback *slack.InteractionCallback
 		if err != nil {
 			log.Errorf("Error updating alert as escalated (%s). Err: %s", alert.Id, err)
 		}
-		response = "Thank you for responding! Alert has been escalated to SecOps (secops@mozilla.com)"
+		response = fmt.Sprintf("Thank you for responding! Alert has been escalated.\nalert id: %s", alert.Id)
 	}
 
-	return &slack.Msg{Text: response, ReplaceOriginal: false}, nil
+	return &slack.Msg{Text: response, ReplaceOriginal: true}, nil
 }
