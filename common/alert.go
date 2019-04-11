@@ -22,15 +22,20 @@ type Alert struct {
 }
 
 func (a *Alert) PrettyPrint() string {
-	return fmt.Sprintf(`
-	Summary: %s
-	Severity: %s
-	Category: %s
-	Timestamp: %s
-	Payload: %s
-	Metadata: %v
-	Id: %s`,
-		a.Summary, a.Severity, a.Category, a.Timestamp, a.Payload, a.Metadata, a.Id)
+	var md string
+	for _, am := range a.Metadata {
+		md = md + fmt.Sprintf(" - %s=%s\n", am.Key, am.Value)
+	}
+	s := fmt.Sprintf(`Id: %s
+Summary: %s
+Severity: %s
+Category: %s
+Timestamp: %s
+Payload: %s
+Metadata:
+%s`,
+		a.Id, a.Summary, a.Severity, a.Category, a.Timestamp, a.Payload, md)
+	return s
 }
 
 func (a *Alert) OlderThan(dur time.Duration) bool {
