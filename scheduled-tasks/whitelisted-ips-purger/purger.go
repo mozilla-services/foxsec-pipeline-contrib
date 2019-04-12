@@ -1,6 +1,7 @@
 package purger
 
 import (
+	"context"
 	"net/http"
 	"os"
 
@@ -10,30 +11,28 @@ import (
 	"go.mozilla.org/mozlogrus"
 )
 
-var PROJECT_ID string
+var (
+	PROJECT_ID string
+	DB         *common.DBClient
+)
 
 func init() {
 	mozlogrus.Enable("purger")
 	PROJECT_ID = os.Getenv("GCP_PROJECT")
+
+	var err error
+	DB, err = common.NewDBClient(context.Background(), PROJECT_ID)
+	if err != nil {
+		log.Fatalf("Error creating db client: %s", err)
+	}
 }
 
 func Purger(w http.ResponseWriter, r *http.Request) {
-	log.Debug("Creating db client")
-	db, err := common.NewDBClient(r.Context(), PROJECT_ID)
-	if err != nil {
-		log.Errorf("Error creating db client: %s", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
-	log.Debug("db client created")
-
-	err = db.RemoveExpiredWhitelistedIps(r.Context())
+	err := DB.RemoveExpiredWhitelistedIps(r.Context())
 	if err != nil {
 		log.Errorf("Error removing expired whitelisted ips: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
 	w.WriteHeader(http.StatusOK)
 }

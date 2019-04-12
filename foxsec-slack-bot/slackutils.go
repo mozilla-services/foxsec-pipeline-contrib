@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -160,4 +161,58 @@ func verifySignature(r *http.Request) error {
 	}
 
 	return nil
+}
+
+func InteractionCallbackParse(reqBody []byte) (*slack.InteractionCallback, error) {
+	var req slack.InteractionCallback
+	// Deal with slack weirdness. Body is `payload=<escaped json>`
+	jsonStr, err := url.QueryUnescape(string(reqBody)[8:])
+	err = json.Unmarshal([]byte(jsonStr), &req)
+	if err != nil {
+		log.Errorf("Error parsing interaction callback: Body: %s | Err: %s", reqBody, err)
+		return nil, err
+	}
+	return &req, nil
+}
+
+func isAlertConfirm(req *slack.InteractionCallback) bool {
+	if strings.HasPrefix(req.CallbackID, "alert_confirmation") {
+		return true
+	}
+
+	return false
+}
+
+func handleAlertConfirm(ctx context.Context, callback *slack.InteractionCallback, db *common.DBClient) (*slack.Msg, error) {
+	// callback id = "alert_confirmation_<id>"
+	alertId := strings.Split(callback.CallbackID, "_")[2]
+	alert, err := db.GetAlert(ctx, alertId)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	response := "Error responding; please contact SecOps (secops@mozilla.com)"
+	if callback.Actions[0].Name == "alert_yes" {
+		alert.SetMetadata("status", common.ALERT_ACKNOWLEDGED)
+		err := db.UpdateAlert(ctx, alert)
+		if err != nil {
+			log.Errorf("Error marking alert (%s) as acknowledged. Err: %s", alert.Id, err)
+			return nil, err
+		}
+		response = fmt.Sprintf("Thank you for responding! Alert has been acknowledged.\nalert id: %s", alert.Id)
+	} else if callback.Actions[0].Name == "alert_no" {
+		err := globalConfig.sesClient.SendEscalationEmail(alert)
+		if err != nil {
+			log.Errorf("Error escalating alert (%s). Err: %s", alert.Id, err)
+		}
+		alert.SetMetadata("status", common.ALERT_ESCALATED)
+		err = db.UpdateAlert(ctx, alert)
+		if err != nil {
+			log.Errorf("Error updating alert as escalated (%s). Err: %s", alert.Id, err)
+		}
+		response = fmt.Sprintf("Thank you for responding! Alert has been escalated.\nalert id: %s", alert.Id)
+	}
+
+	return &slack.Msg{Text: response, ReplaceOriginal: true}, nil
 }

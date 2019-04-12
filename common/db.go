@@ -8,8 +8,10 @@ import (
 )
 
 const (
-	IP_KIND      = "whitelisted_ip"
-	IP_NAMESPACE = "whitelisted_ip"
+	ALERT_KIND      = "alerts"
+	ALERT_NAMESPACE = "alerts"
+	IP_KIND         = "whitelisted_ip"
+	IP_NAMESPACE    = "whitelisted_ip"
 )
 
 type DBClient struct {
@@ -97,4 +99,74 @@ func (db *DBClient) SaveWhitelistedIp(ctx context.Context, whitelistedIp *Whitel
 
 func (db *DBClient) DeleteWhitelistedIp(ctx context.Context, whitelistedIp *WhitelistedIP) error {
 	return db.dsClient.Delete(ctx, db.whitelistedIpKey(whitelistedIp.IP))
+}
+
+func (db *DBClient) alertKey(ip string) *datastore.Key {
+	nk := datastore.NameKey(ALERT_KIND, ip, nil)
+	nk.Namespace = ALERT_NAMESPACE
+	return nk
+}
+
+func StateToAlert(sf *StateField) (*Alert, error) {
+	var alert Alert
+	err := json.Unmarshal([]byte(sf.State), &alert)
+	if err != nil {
+		return nil, err
+	}
+	return &alert, nil
+}
+
+func AlertToState(a *Alert) (*StateField, error) {
+	buf, err := json.Marshal(a)
+	if err != nil {
+		return nil, err
+	}
+	return &StateField{string(buf)}, nil
+}
+
+func (db *DBClient) GetAlert(ctx context.Context, alertId string) (*Alert, error) {
+	var sf StateField
+	err := db.dsClient.Get(ctx, db.alertKey(alertId), &sf)
+	if err != nil {
+		return nil, err
+	}
+	alert, err := StateToAlert(&sf)
+	if err != nil {
+		return nil, err
+	}
+	return alert, nil
+}
+
+func (db *DBClient) GetAllAlerts(ctx context.Context) ([]*Alert, error) {
+	var alerts []*Alert
+	var states []*StateField
+	nq := datastore.NewQuery(ALERT_KIND).Namespace(ALERT_NAMESPACE)
+	_, err := db.dsClient.GetAll(ctx, nq, &states)
+	for _, state := range states {
+		alert, err := StateToAlert(state)
+		if err != nil {
+			return nil, err
+		}
+		alerts = append(alerts, alert)
+	}
+	return alerts, err
+}
+
+func (db *DBClient) UpdateAlert(ctx context.Context, alert *Alert) error {
+	tx, err := db.dsClient.NewTransaction(ctx)
+	if err != nil {
+		return err
+	}
+
+	sf, err := AlertToState(alert)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Put(db.alertKey(alert.Id), sf); err != nil {
+		return err
+	}
+	if _, err := tx.Commit(); err != nil {
+		return err
+	}
+	return nil
 }
