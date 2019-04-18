@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -94,12 +95,15 @@ func TestWhitelistedIpDB(t *testing.T) {
 
 func WIPEqual(wipOne, wipTwo *WhitelistedIP) bool {
 	if wipOne.IP != wipTwo.IP {
+		fmt.Printf("IP's did not match: %s != %s\n", wipOne.IP, wipTwo.IP)
 		return false
 	}
 	if wipOne.CreatedBy != wipTwo.CreatedBy {
+		fmt.Printf("CreatedBy did not match: %s != %s\n", wipOne.CreatedBy, wipTwo.CreatedBy)
 		return false
 	}
 	if !wipOne.ExpiresAt.Equal(wipTwo.ExpiresAt) {
+		fmt.Printf("ExpiresAt did not match: %s != %s\n", wipOne.ExpiresAt, wipTwo.ExpiresAt)
 		return false
 	}
 	return true
