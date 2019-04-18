@@ -8,4 +8,4 @@ before_install:
 
 script:
   - docker build -t foxsec-pipeline-contrib:latest .
-  - run_tests.sh
+  - ./run_tests.sh
