@@ -195,7 +195,7 @@ func handleAlertConfirm(ctx context.Context, callback *slack.InteractionCallback
 	response := "Error responding; please contact SecOps (secops@mozilla.com)"
 	if callback.Actions[0].Name == "alert_yes" {
 		alert.SetMetadata("status", common.ALERT_ACKNOWLEDGED)
-		err := db.UpdateAlert(ctx, alert)
+		err := db.SaveAlert(ctx, alert)
 		if err != nil {
 			log.Errorf("Error marking alert (%s) as acknowledged. Err: %s", alert.Id, err)
 			return nil, err
@@ -207,7 +207,7 @@ func handleAlertConfirm(ctx context.Context, callback *slack.InteractionCallback
 			log.Errorf("Error escalating alert (%s). Err: %s", alert.Id, err)
 		}
 		alert.SetMetadata("status", common.ALERT_ESCALATED)
-		err = db.UpdateAlert(ctx, alert)
+		err = db.SaveAlert(ctx, alert)
 		if err != nil {
 			log.Errorf("Error updating alert as escalated (%s). Err: %s", alert.Id, err)
 		}

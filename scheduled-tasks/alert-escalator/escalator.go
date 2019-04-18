@@ -77,7 +77,7 @@ func Escalator(w http.ResponseWriter, r *http.Request) {
 				log.Errorf("Error escalating alert (%s). Err: %s", alert.Id, err)
 				returnEarly = true
 			}
-			err = DB.UpdateAlert(r.Context(), alert)
+			err = DB.SaveAlert(r.Context(), alert)
 			if err != nil {
 				log.Errorf("Error updating alert as escalated (%s). Err: %s", alert.Id, err)
 				returnEarly = true
