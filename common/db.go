@@ -26,6 +26,10 @@ func NewDBClient(ctx context.Context, projectID string) (*DBClient, error) {
 	return &DBClient{dsClient}, nil
 }
 
+func (db *DBClient) Close() error {
+	return db.dsClient.Close()
+}
+
 type StateField struct {
 	State string `datastore:"state" json:"state"`
 }
@@ -45,10 +49,6 @@ func StateToWhitelistedIp(sf *StateField) (*WhitelistedIP, error) {
 		return nil, err
 	}
 	return &wip, nil
-}
-
-func (db *DBClient) Close() error {
-	return db.dsClient.Close()
 }
 
 func (db *DBClient) whitelistedIpKey(ip string) *datastore.Key {
@@ -89,12 +89,23 @@ func (db *DBClient) GetAllWhitelistedIps(ctx context.Context) ([]*WhitelistedIP,
 }
 
 func (db *DBClient) SaveWhitelistedIp(ctx context.Context, whitelistedIp *WhitelistedIP) error {
+	tx, err := db.dsClient.NewTransaction(ctx)
+	if err != nil {
+		return err
+	}
+
 	sf, err := WhitelistedIpToState(whitelistedIp)
 	if err != nil {
 		return err
 	}
-	_, err = db.dsClient.Put(ctx, db.whitelistedIpKey(whitelistedIp.IP), sf)
-	return err
+
+	if _, err = tx.Put(db.whitelistedIpKey(whitelistedIp.IP), sf); err != nil {
+		return err
+	}
+	if _, err := tx.Commit(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (db *DBClient) DeleteWhitelistedIp(ctx context.Context, whitelistedIp *WhitelistedIP) error {
@@ -152,7 +163,7 @@ func (db *DBClient) GetAllAlerts(ctx context.Context) ([]*Alert, error) {
 	return alerts, err
 }
 
-func (db *DBClient) UpdateAlert(ctx context.Context, alert *Alert) error {
+func (db *DBClient) SaveAlert(ctx context.Context, alert *Alert) error {
 	tx, err := db.dsClient.NewTransaction(ctx)
 	if err != nil {
 		return err
