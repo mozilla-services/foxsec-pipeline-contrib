@@ -15,7 +15,7 @@ type KMSClient struct {
 }
 
 func NewKMSClient() (*KMSClient, error) {
-	client, err := cloudkms.NewKeyManagementClient(context.TODO())
+	client, err := cloudkms.NewKeyManagementClient(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +28,11 @@ func prepareSecret(ciphertext string) ([]byte, error) {
 }
 
 func (kms *KMSClient) DecryptEnvVar(keyName, envVar string) (string, error) {
-	ciphertext, err := prepareSecret(os.Getenv(envVar))
+	v := os.Getenv(envVar)
+	if !strings.HasPrefix(v, "cloudkms://") {
+		return v, nil
+	}
+	ciphertext, err := prepareSecret(v)
 	if err != nil {
 		return "", err
 	}
