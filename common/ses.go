@@ -14,9 +14,9 @@ const (
 )
 
 type SESClient struct {
-	sesClient       *ses.SES
-	senderEmail     string
-	escalationEmail string
+	sesClient              *ses.SES
+	senderEmail            string
+	defaultEscalationEmail string
 }
 
 func NewSESClient(region, accessKeyId, secretAccessKey, senderEmail, escalationEmail string) (*SESClient, error) {
@@ -28,20 +28,25 @@ func NewSESClient(region, accessKeyId, secretAccessKey, senderEmail, escalationE
 		return nil, err
 	}
 	return &SESClient{
-		sesClient:       ses.New(sess),
-		senderEmail:     senderEmail,
-		escalationEmail: escalationEmail,
+		sesClient:              ses.New(sess),
+		senderEmail:            senderEmail,
+		defaultEscalationEmail: escalationEmail,
 	}, nil
 }
 
 func (sesc *SESClient) SendEscalationEmail(alert *Alert) error {
-	subject := fmt.Sprintf("[foxsec-pipeline-alert] Escalating alert - %s", alert.Summary)
+	subject := fmt.Sprintf("[foxsec-alert] Escalating alert - %s", alert.Summary)
+
+	escalationEmail := alert.GetMetadata(ESCALATE_TO)
+	if escalationEmail == "" {
+		escalationEmail = sesc.defaultEscalationEmail
+	}
 
 	input := &ses.SendEmailInput{
 		Destination: &ses.Destination{
 			CcAddresses: []*string{},
 			ToAddresses: []*string{
-				aws.String(sesc.escalationEmail),
+				aws.String(escalationEmail),
 			},
 		},
 		Message: &ses.Message{

@@ -192,27 +192,38 @@ func handleAlertConfirm(ctx context.Context, callback *slack.InteractionCallback
 		return nil, err
 	}
 
-	response := "Error responding; please contact SecOps (secops@mozilla.com)"
+	response := &slack.Msg{
+		Text:            "Error responding; please contact SecOps (secops@mozilla.com)",
+		ReplaceOriginal: true,
+	}
+
+	if !alert.IsStatus(common.ALERT_NEW) {
+		response.Text = fmt.Sprintf("Thank you for responding! Alert has already been marked as %s.\nalert id: %s", alert.GetMetadata("status"), alert.Id)
+		return response, nil
+	}
+
 	if callback.Actions[0].Name == "alert_yes" {
 		alert.SetMetadata("status", common.ALERT_ACKNOWLEDGED)
 		err := db.SaveAlert(ctx, alert)
 		if err != nil {
 			log.Errorf("Error marking alert (%s) as acknowledged. Err: %s", alert.Id, err)
-			return nil, err
+			return response, err
 		}
-		response = fmt.Sprintf("Thank you for responding! Alert has been acknowledged.\nalert id: %s", alert.Id)
+		response.Text = fmt.Sprintf("Thank you for responding! Alert has been acknowledged.\nalert id: %s", alert.Id)
 	} else if callback.Actions[0].Name == "alert_no" {
 		err := globalConfig.sesClient.SendEscalationEmail(alert)
 		if err != nil {
 			log.Errorf("Error escalating alert (%s). Err: %s", alert.Id, err)
+			return response, err
 		}
 		alert.SetMetadata("status", common.ALERT_ESCALATED)
 		err = db.SaveAlert(ctx, alert)
 		if err != nil {
 			log.Errorf("Error updating alert as escalated (%s). Err: %s", alert.Id, err)
+			return response, err
 		}
-		response = fmt.Sprintf("Thank you for responding! Alert has been escalated.\nalert id: %s", alert.Id)
+		response.Text = fmt.Sprintf("Thank you for responding! Alert has been escalated.\nalert id: %s", alert.Id)
 	}
 
-	return &slack.Msg{Text: response, ReplaceOriginal: true}, nil
+	return response, nil
 }

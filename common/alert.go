@@ -9,6 +9,8 @@ const (
 	ALERT_NEW          = "NEW"
 	ALERT_ACKNOWLEDGED = "ACKNOWLEDGED"
 	ALERT_ESCALATED    = "ESCALATED"
+
+	ESCALATE_TO = "escalate_to"
 )
 
 type Alert struct {
@@ -31,10 +33,12 @@ Summary: %s
 Severity: %s
 Category: %s
 Timestamp: %s
-Payload: %s
 Metadata:
-%s`,
-		a.Id, a.Summary, a.Severity, a.Category, a.Timestamp, a.Payload, md)
+%s
+Payload (message sent to user):
+%s
+`,
+		a.Id, a.Summary, a.Severity, a.Category, a.Timestamp, md, a.Payload)
 	return s
 }
 
