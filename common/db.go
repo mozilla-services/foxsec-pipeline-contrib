@@ -153,6 +153,9 @@ func (db *DBClient) GetAllAlerts(ctx context.Context) ([]*Alert, error) {
 	var states []*StateField
 	nq := datastore.NewQuery(ALERT_KIND).Namespace(ALERT_NAMESPACE)
 	_, err := db.dsClient.GetAll(ctx, nq, &states)
+	if err != nil {
+		return alerts, err
+	}
 	for _, state := range states {
 		alert, err := StateToAlert(state)
 		if err != nil {
@@ -160,7 +163,7 @@ func (db *DBClient) GetAllAlerts(ctx context.Context) ([]*Alert, error) {
 		}
 		alerts = append(alerts, alert)
 	}
-	return alerts, err
+	return alerts, nil
 }
 
 func (db *DBClient) SaveAlert(ctx context.Context, alert *Alert) error {
