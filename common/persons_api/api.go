@@ -63,6 +63,9 @@ func (c *Client) GetAccessToken(authUrl string) (string, error) {
 
 func (c *Client) GetPersonByEmail(primaryEmail string) (*Person, error) {
 	req, err := http.NewRequest("GET", c.baseUrl+"/v2/user/primary_email/"+primaryEmail, nil)
+	if err != nil {
+		return nil, err
+	}
 	req.Header.Add("Authorization", "Bearer "+c.accessToken)
 
 	resp, err := c.httpClient.Do(req)
@@ -71,6 +74,9 @@ func (c *Client) GetPersonByEmail(primaryEmail string) (*Person, error) {
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 
 	p, err := UnmarshalPerson(body)
 	if err != nil {

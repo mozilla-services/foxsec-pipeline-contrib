@@ -87,10 +87,9 @@ func init() {
 // config is the global configuration structure for the function
 type config struct {
 	// Set from environment
-	gcpStackdriverName string // GCP Stackdriver logger name
-	duoAPIHost         string // Duo API hostname
-	duoIKey            string // Duo API ikey
-	duoSKey            string // Duo API skey
+	duoAPIHost string // Duo API hostname
+	duoIKey    string // Duo API ikey
+	duoSKey    string // Duo API skey
 
 	// Allocated during initialization
 	duo               *duoInterface // Duo authorization header generator
