@@ -31,7 +31,7 @@ func (db *DBClient) Close() error {
 }
 
 type StateField struct {
-	State string `datastore:"state" json:"state"`
+	State string `datastore:"state,noindex" json:"state"`
 }
 
 func WhitelistedIpToState(wip *WhitelistedIP) (*StateField, error) {
