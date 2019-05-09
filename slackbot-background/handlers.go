@@ -65,7 +65,7 @@ func handleAlertConfirm(ctx context.Context, callback common.InteractionData, db
 	alertId := strings.Split(callback.CallbackID, "_")[2]
 	alert, err := db.GetAlert(ctx, alertId)
 	if err != nil {
-		log.Error(err)
+		log.Errorf("Could not find alert with ID %s (from Callback ID: %s). Err: %s", alertId, callback.CallbackID, err)
 		return nil, err
 	}
 
