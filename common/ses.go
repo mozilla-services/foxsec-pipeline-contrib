@@ -19,6 +19,16 @@ type SESClient struct {
 	defaultEscalationEmail string
 }
 
+func NewSESClientFromConfig(config *Configuration) (*SESClient, error) {
+	return NewSESClient(
+		config.AwsRegion,
+		config.AwsAccessKeyId,
+		config.AwsSecretAccessKey,
+		config.SesSenderEmail,
+		config.DefaultEscalationEmail,
+	)
+}
+
 func NewSESClient(region, accessKeyId, secretAccessKey, senderEmail, escalationEmail string) (*SESClient, error) {
 	sess, err := session.NewSession(&aws.Config{
 		Region:      aws.String(region),

@@ -21,7 +21,7 @@ func handleWhitelistCmd(ctx context.Context, cmd common.SlashCommandData, db *co
 		return msg, err
 	}
 
-	userProfile, err := globalConfig.slackClient.GetUserProfile(cmd.UserID, false)
+	userProfile, err := globals.slackClient.GetUserProfile(cmd.UserID, false)
 	if err != nil {
 		log.Errorf("Error getting user profile: %s", err)
 		msg.Text = "Was unable to get your email from Slack."
@@ -50,8 +50,13 @@ func handleWhitelistCmd(ctx context.Context, cmd common.SlashCommandData, db *co
 		return msg, err
 	}
 
+	err = deleteIpFromIprepd(ip.String())
+	if err != nil {
+		log.Errorf("Error deleting %s from iprepd: %s", ip, err)
+	}
+
 	// send to audit channel
-	_, _, err = globalConfig.slackClient.PostMessage(FOXSEC_SLACK_CHANNEL_ID, slack.MsgOptionText(auditMsg, false))
+	_, _, err = globals.slackClient.PostMessage(config.SlackChannelId, slack.MsgOptionText(auditMsg, false))
 	if err != nil {
 		log.Errorf("Error sending audit message to foxsec bot slack channel: %s", err)
 	}
@@ -90,7 +95,7 @@ func handleAlertConfirm(ctx context.Context, callback common.InteractionData, db
 	} else if callback.ActionName == "alert_no" {
 		// Override `escalate_to` to use the default (which should be the security teams main pagerduty email)
 		alert.SetMetadata("escalate_to", "")
-		err := globalConfig.sesClient.SendEscalationEmail(alert)
+		err := globals.sesClient.SendEscalationEmail(alert)
 		if err != nil {
 			log.Errorf("Error escalating alert (%s). Err: %s", alert.Id, err)
 			return response, err
