@@ -23,8 +23,8 @@ const (
 		"with some custom checks. Examples: '72h' or '2h45m'. " +
 		"Valid time units are 'm' and 'h'. If you omit a duration, " +
 		"the default (24 hours) is used. If your duration is under " +
-		"5 minutes, it is increased to 5 minutes. If do not want the " +
-		"whitelisting to expire put 'never' as the expiration, this " +
+		"5 minutes, it is increased to 5 minutes. If you do not want the " +
+		"whitelisted IP to expire, put 'never' as the expiration. This " +
 		"will make the expiration duration roughly ten years from now."
 )
 
