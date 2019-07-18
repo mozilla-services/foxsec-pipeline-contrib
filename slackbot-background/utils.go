@@ -28,13 +28,18 @@ func checkUsersGroups(email string) (bool, error) {
 		return false, err
 	}
 
+	groups := []string{}
 	for group := range person.AccessInformation.LDAP.Values {
+		groups = append(groups, group)
 		for _, allowedGroup := range config.AllowedLDAPGroups {
 			if group == allowedGroup {
+				log.Infof("%s has allowed ldap group: %s", email, group)
 				return true, nil
 			}
 		}
 	}
+
+	log.Infof("%s's groups (%v) do not include an allowed ldap group (%v)", email, groups, config.AllowedLDAPGroups)
 
 	return false, nil
 }

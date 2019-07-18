@@ -59,6 +59,7 @@ type Globals struct {
 }
 
 func InitConfig() {
+	log.Info("Starting up...")
 	configPath := os.Getenv("CONFIG_PATH")
 	if configPath == "" {
 		log.Fatal("$CONFIG_PATH must be set.")
@@ -84,6 +85,8 @@ func InitConfig() {
 	if err != nil {
 		log.Fatalf("Could not create persons api client: %s", err)
 	}
+
+	log.Infof("Allowed LDAP Groups for Whitelist Command: %v", config.AllowedLDAPGroups)
 }
 
 func alertEscalator(ctx context.Context) error {
