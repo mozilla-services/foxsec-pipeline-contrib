@@ -13,9 +13,24 @@ import (
 )
 
 func handleWhitelistCmd(ctx context.Context, cmd common.SlashCommandData, db *common.DBClient) (*slack.Msg, error) {
+	var (
+		err    error
+		errMsg string
+	)
 	msg := &slack.Msg{}
+	whitelistedObj := &common.WhitelistedObject{}
 
-	ip, expiresAt, errMsg, err := parseCommandText(cmd.Text)
+	if cmd.Cmd == WHITELIST_IP_SLASH_COMMAND || cmd.Cmd == STAGING_WHITELIST_IP_SLASH_COMMAND {
+		whitelistedObj.Type = common.IP_TYPE
+	} else if cmd.Cmd == WHITELIST_EMAIL_SLASH_COMMAND || cmd.Cmd == STAGING_WHITELIST_EMAIL_SLASH_COMMAND {
+		whitelistedObj.Type = common.EMAIL_TYPE
+	} else {
+		err = fmt.Errorf("Error processing command")
+		msg.Text = err.Error()
+		return msg, err
+	}
+
+	whitelistedObj.Object, whitelistedObj.ExpiresAt, errMsg, err = parseWhitelistText(cmd.Text, whitelistedObj.Type)
 	if err != nil {
 		msg.Text = errMsg
 		return msg, err
@@ -41,18 +56,19 @@ func handleWhitelistCmd(ctx context.Context, cmd common.SlashCommandData, db *co
 		return msg, err
 	}
 
-	auditMsg := fmt.Sprintf("%s submitted %s to be whitelisted until %s", userProfile.Email, ip.String(), expiresAt.Format(time.UnixDate))
+	whitelistedObj.CreatedBy = userProfile.Email
+	auditMsg := fmt.Sprintf("%s submitted %s to be whitelisted until %s", userProfile.Email, whitelistedObj.Object, whitelistedObj.ExpiresAt.Format(time.UnixDate))
 	log.Info(auditMsg)
-	err = db.SaveWhitelistedIp(ctx, common.NewWhitelistedIP(ip.String(), expiresAt, userProfile.Email))
+	err = db.SaveWhitelistedObject(ctx, whitelistedObj)
 	if err != nil {
-		log.Errorf("Error saving whitelisted ip: %s", err)
-		msg.Text = "Error saving IP to whitelist."
+		log.Errorf("Error saving whitelisted object: %s", err)
+		msg.Text = "Error saving to whitelist."
 		return msg, err
 	}
 
-	err = deleteIpFromIprepd(ip.String())
+	err = deleteObjFromIprepd(whitelistedObj.Object, whitelistedObj.Type)
 	if err != nil {
-		log.Errorf("Error deleting %s from iprepd: %s", ip, err)
+		log.Errorf("Error deleting %s from iprepd: %s", whitelistedObj.Object, err)
 	}
 
 	// send to audit channel
@@ -61,7 +77,7 @@ func handleWhitelistCmd(ctx context.Context, cmd common.SlashCommandData, db *co
 		log.Errorf("Error sending audit message to foxsec bot slack channel: %s", err)
 	}
 
-	msg.Text = fmt.Sprintf("Successfully saved %s to the whitelist. Will expire at %s", ip, expiresAt.Format(time.UnixDate))
+	msg.Text = fmt.Sprintf("Successfully saved %s to the whitelist. Will expire at %s", whitelistedObj.Object, whitelistedObj.ExpiresAt.Format(time.UnixDate))
 	return msg, nil
 }
 

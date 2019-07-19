@@ -53,6 +53,16 @@ func InitConfig() {
 	}
 
 	globalConfig.triggerTopicName = os.Getenv("TRIGGER_TOPIC_NAME")
+
+	topic := globalConfig.pubsubClient.Topic(globalConfig.triggerTopicName)
+	ok, err := topic.Exists(context.Background())
+	if err != nil {
+		log.Errorf("Error checking whether topic (%s) exists. Err: %s", globalConfig.triggerTopicName, err)
+		return
+	}
+	if !ok {
+		log.Fatalf("Topic `%s` does not exist.", globalConfig.triggerTopicName)
+	}
 }
 
 func InteractionCallbackParse(reqBody []byte) (*slack.InteractionCallback, error) {
@@ -128,14 +138,6 @@ func SlackbotHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if data != nil {
 		topic := globalConfig.pubsubClient.Topic(globalConfig.triggerTopicName)
-		ok, err := topic.Exists(r.Context())
-		if err != nil {
-			log.Errorf("Error checking whether topic (%s) exists. Err: %s", globalConfig.triggerTopicName, err)
-			return
-		}
-		if !ok {
-			log.Fatalf("Topic `%s` does not exist.", globalConfig.triggerTopicName)
-		}
 		defer topic.Stop()
 
 		psmsg, err := data.ToPubSubMessage()

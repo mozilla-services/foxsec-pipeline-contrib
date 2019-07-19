@@ -8,10 +8,10 @@ import (
 )
 
 const (
-	ALERT_KIND      = "alerts"
 	ALERT_NAMESPACE = "alerts"
-	IP_KIND         = "whitelisted_ip"
-	IP_NAMESPACE    = "whitelisted_ip"
+	ALERT_KIND      = ALERT_NAMESPACE
+
+	WHITELISTED_OBJ_NAMESPACE = "whitelisted_object"
 )
 
 type DBClient struct {
@@ -34,37 +34,37 @@ type StateField struct {
 	State string `datastore:"state,noindex" json:"state"`
 }
 
-func WhitelistedIpToState(wip *WhitelistedIP) (*StateField, error) {
-	buf, err := json.Marshal(wip)
+func WhitelistedObjectToState(wobj *WhitelistedObject) (*StateField, error) {
+	buf, err := json.Marshal(wobj)
 	if err != nil {
 		return nil, err
 	}
 	return &StateField{string(buf)}, nil
 }
 
-func StateToWhitelistedIp(sf *StateField) (*WhitelistedIP, error) {
-	var wip WhitelistedIP
-	err := json.Unmarshal([]byte(sf.State), &wip)
+func StateToWhitelistedObject(sf *StateField) (*WhitelistedObject, error) {
+	var wobj WhitelistedObject
+	err := json.Unmarshal([]byte(sf.State), &wobj)
 	if err != nil {
 		return nil, err
 	}
-	return &wip, nil
+	return &wobj, nil
 }
 
-func (db *DBClient) whitelistedIpKey(ip string) *datastore.Key {
-	nk := datastore.NameKey(IP_KIND, ip, nil)
-	nk.Namespace = IP_NAMESPACE
+func (db *DBClient) whitelistedObjectKey(whitelistedObj *WhitelistedObject) *datastore.Key {
+	nk := datastore.NameKey(whitelistedObj.Type, whitelistedObj.Object, nil)
+	nk.Namespace = WHITELISTED_OBJ_NAMESPACE
 	return nk
 }
 
-func (db *DBClient) RemoveExpiredWhitelistedIps(ctx context.Context) error {
-	ips, err := db.GetAllWhitelistedIps(ctx)
+func (db *DBClient) RemoveExpiredWhitelistedObjects(ctx context.Context) error {
+	ips, err := db.GetAllWhitelistedObjects(ctx)
 	if err != nil {
 		return err
 	}
 	for _, ip := range ips {
 		if ip.IsExpired() {
-			err = db.DeleteWhitelistedIp(ctx, ip)
+			err = db.DeleteWhitelistedObject(ctx, ip)
 			if err != nil {
 				return err
 			}
@@ -73,33 +73,38 @@ func (db *DBClient) RemoveExpiredWhitelistedIps(ctx context.Context) error {
 	return nil
 }
 
-func (db *DBClient) GetAllWhitelistedIps(ctx context.Context) ([]*WhitelistedIP, error) {
-	var ips []*WhitelistedIP
+func (db *DBClient) GetAllWhitelistedObjects(ctx context.Context) ([]*WhitelistedObject, error) {
+	var wos []*WhitelistedObject
 	var states []*StateField
-	nq := datastore.NewQuery(IP_KIND).Namespace(IP_NAMESPACE)
-	_, err := db.dsClient.GetAll(ctx, nq, &states)
-	for _, state := range states {
-		ip, err := StateToWhitelistedIp(state)
+	for _, kind := range []string{IP_TYPE, EMAIL_TYPE} {
+		nq := datastore.NewQuery(kind).Namespace(WHITELISTED_OBJ_NAMESPACE)
+		_, err := db.dsClient.GetAll(ctx, nq, &states)
 		if err != nil {
 			return nil, err
 		}
-		ips = append(ips, ip)
+		for _, state := range states {
+			wo, err := StateToWhitelistedObject(state)
+			if err != nil {
+				return nil, err
+			}
+			wos = append(wos, wo)
+		}
 	}
-	return ips, err
+	return wos, nil
 }
 
-func (db *DBClient) SaveWhitelistedIp(ctx context.Context, whitelistedIp *WhitelistedIP) error {
+func (db *DBClient) SaveWhitelistedObject(ctx context.Context, whitelistedObject *WhitelistedObject) error {
 	tx, err := db.dsClient.NewTransaction(ctx)
 	if err != nil {
 		return err
 	}
 
-	sf, err := WhitelistedIpToState(whitelistedIp)
+	sf, err := WhitelistedObjectToState(whitelistedObject)
 	if err != nil {
 		return err
 	}
 
-	if _, err = tx.Put(db.whitelistedIpKey(whitelistedIp.IP), sf); err != nil {
+	if _, err = tx.Put(db.whitelistedObjectKey(whitelistedObject), sf); err != nil {
 		return err
 	}
 	if _, err := tx.Commit(); err != nil {
@@ -108,8 +113,8 @@ func (db *DBClient) SaveWhitelistedIp(ctx context.Context, whitelistedIp *Whitel
 	return nil
 }
 
-func (db *DBClient) DeleteWhitelistedIp(ctx context.Context, whitelistedIp *WhitelistedIP) error {
-	return db.dsClient.Delete(ctx, db.whitelistedIpKey(whitelistedIp.IP))
+func (db *DBClient) DeleteWhitelistedObject(ctx context.Context, whitelistedObject *WhitelistedObject) error {
+	return db.dsClient.Delete(ctx, db.whitelistedObjectKey(whitelistedObject))
 }
 
 func (db *DBClient) alertKey(ip string) *datastore.Key {

@@ -57,45 +57,51 @@ func TestAlertDB(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestWhitelistedIpDB(t *testing.T) {
+func TestWhitelistedObjectDB(t *testing.T) {
 	db, err := NewDBClient(context.Background(), "test")
 	assert.NoError(t, err)
 
-	wip := NewWhitelistedIP("127.0.0.1", time.Now().Add(time.Hour), "test")
-
-	err = db.SaveWhitelistedIp(context.Background(), wip)
+	wip, err := NewWhitelistedObject("127.0.0.1", "ip", time.Now().Add(time.Hour), "test")
 	assert.NoError(t, err)
 
-	wips, err := db.GetAllWhitelistedIps(context.Background())
+	err = db.SaveWhitelistedObject(context.Background(), wip)
+	assert.NoError(t, err)
+
+	wips, err := db.GetAllWhitelistedObjects(context.Background())
 	assert.NoError(t, err)
 	assert.True(t, 1 == len(wips))
-	assert.True(t, WIPEqual(wip, wips[0]))
+	assert.True(t, WOBJEqual(wip, wips[0]))
 
-	expiredWip := NewWhitelistedIP("127.0.0.2", time.Now().Add(time.Duration(-1)*time.Hour), "test")
-	err = db.SaveWhitelistedIp(context.Background(), expiredWip)
+	expiredWip, err := NewWhitelistedObject("127.0.0.2", "ip", time.Now().Add(time.Duration(-1)*time.Hour), "test")
 	assert.NoError(t, err)
-	wips, err = db.GetAllWhitelistedIps(context.Background())
+	err = db.SaveWhitelistedObject(context.Background(), expiredWip)
+	assert.NoError(t, err)
+	wips, err = db.GetAllWhitelistedObjects(context.Background())
 	assert.NoError(t, err)
 	assert.True(t, 2 == len(wips))
 
-	err = db.RemoveExpiredWhitelistedIps(context.Background())
+	err = db.RemoveExpiredWhitelistedObjects(context.Background())
 	assert.NoError(t, err)
 
-	wips, err = db.GetAllWhitelistedIps(context.Background())
+	wips, err = db.GetAllWhitelistedObjects(context.Background())
 	assert.NoError(t, err)
 	assert.True(t, 1 == len(wips))
-	assert.True(t, WIPEqual(wip, wips[0]))
+	assert.True(t, WOBJEqual(wip, wips[0]))
 
-	err = db.DeleteWhitelistedIp(context.Background(), wip)
+	err = db.DeleteWhitelistedObject(context.Background(), wip)
 	assert.NoError(t, err)
 
 	err = db.Close()
 	assert.NoError(t, err)
 }
 
-func WIPEqual(wipOne, wipTwo *WhitelistedIP) bool {
-	if wipOne.IP != wipTwo.IP {
-		fmt.Printf("IP's did not match: %s != %s\n", wipOne.IP, wipTwo.IP)
+func WOBJEqual(wipOne, wipTwo *WhitelistedObject) bool {
+	if wipOne.Type != wipTwo.Type {
+		fmt.Printf("Type's did not match: %s != %s\n", wipOne.Type, wipTwo.Type)
+		return false
+	}
+	if wipOne.Object != wipTwo.Object {
+		fmt.Printf("Object's did not match: %s != %s\n", wipOne.Object, wipTwo.Object)
 		return false
 	}
 	if wipOne.CreatedBy != wipTwo.CreatedBy {
