@@ -86,6 +86,17 @@ func InitConfig() {
 		log.Fatalf("Could not create persons api client: %s", err)
 	}
 
+	go func() {
+		for {
+			time.Sleep(time.Hour)
+			log.Info("Refreshing access token")
+			err = globals.personsClient.RefreshAccessToken()
+			if err != nil {
+				log.Errorf("Error refreshing persons access token: %s", err)
+			}
+		}
+	}()
+
 	log.Infof("Allowed LDAP Groups for Whitelist Command: %v", config.AllowedLDAPGroups)
 }
 
