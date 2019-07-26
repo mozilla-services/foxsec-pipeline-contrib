@@ -3,8 +3,10 @@ package persons_api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sync"
 )
 
 type Client struct {
@@ -13,6 +15,9 @@ type Client struct {
 	accessToken  string
 	httpClient   *http.Client
 	baseUrl      string
+	authUrl      string
+
+	rwLock *sync.RWMutex
 }
 
 func NewClient(id, secret, baseUrl, authUrl string) (*Client, error) {
@@ -22,13 +27,25 @@ func NewClient(id, secret, baseUrl, authUrl string) (*Client, error) {
 		clientId:     id,
 		clientSecret: secret,
 		baseUrl:      baseUrl,
+		authUrl:      authUrl,
+		rwLock:       &sync.RWMutex{},
 	}
-	accessToken, err := c.GetAccessToken(authUrl)
+	err := c.RefreshAccessToken()
 	if err != nil {
 		return nil, err
 	}
-	c.accessToken = accessToken
 	return c, nil
+}
+
+func (c *Client) RefreshAccessToken() error {
+	c.rwLock.Lock()
+	defer c.rwLock.Unlock()
+	accessToken, err := c.GetAccessToken(c.authUrl)
+	if err != nil {
+		return err
+	}
+	c.accessToken = accessToken
+	return nil
 }
 
 func (c *Client) GetAccessToken(authUrl string) (string, error) {
@@ -62,6 +79,8 @@ func (c *Client) GetAccessToken(authUrl string) (string, error) {
 }
 
 func (c *Client) GetPersonByEmail(primaryEmail string) (*Person, error) {
+	c.rwLock.RLock()
+	defer c.rwLock.RUnlock()
 	req, err := http.NewRequest("GET", c.baseUrl+"/v2/user/primary_email/"+primaryEmail, nil)
 	if err != nil {
 		return nil, err
@@ -72,6 +91,11 @@ func (c *Client) GetPersonByEmail(primaryEmail string) (*Person, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("Persons API responded with status code %d", resp.StatusCode)
+	}
+
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
