@@ -39,6 +39,10 @@ type Configuration struct {
 	AllowedLDAPGroups   []string `yaml:"allowed_ldap_groups"`
 
 	IprepdInstances []IprepdInstance `yaml:"iprepd_instances"`
+
+	Auth0Domain       string `yaml:"auth0_domain"`
+	Auth0ClientId     string `yaml:"auth0_client_id"`
+	Auth0ClientSecret string `yaml:"auth0_client_secret"`
 }
 
 type IprepdInstance struct {
