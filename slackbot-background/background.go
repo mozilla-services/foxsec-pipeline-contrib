@@ -16,10 +16,13 @@ import (
 )
 
 const (
-	WHITELIST_IP_SLASH_COMMAND         = "/whitelist_ip"
-	STAGING_WHITELIST_IP_SLASH_COMMAND = "/staging_whitelist_ip"
-	DEFAULT_EXPIRATION_DURATION        = time.Hour * 24
-	DURATION_DOC                       = "FoxsecBot uses Go's time.ParseDuration internally " +
+	WHITELIST_IP_SLASH_COMMAND            = "/whitelist_ip"
+	STAGING_WHITELIST_IP_SLASH_COMMAND    = "/staging_whitelist_ip"
+	WHITELIST_EMAIL_SLASH_COMMAND         = "/whitelist_email"
+	STAGING_WHITELIST_EMAIL_SLASH_COMMAND = "/staging_whitelist_email"
+
+	DEFAULT_EXPIRATION_DURATION = time.Hour * 24
+	DURATION_DOC                = "FoxsecBot uses Go's time.ParseDuration internally " +
 		"with some custom checks. Examples: '72h' or '2h45m'. " +
 		"Valid time units are 'm' and 'h'. If you omit a duration, " +
 		"the default (24 hours) is used. If your duration is under " +
@@ -34,6 +37,13 @@ var (
 	DB      *common.DBClient
 
 	config = &common.Configuration{}
+
+	ALLOWED_COMMANDS = []string{
+		WHITELIST_IP_SLASH_COMMAND,
+		STAGING_WHITELIST_IP_SLASH_COMMAND,
+		WHITELIST_EMAIL_SLASH_COMMAND,
+		STAGING_WHITELIST_EMAIL_SLASH_COMMAND,
+	}
 )
 
 func init() {
@@ -100,6 +110,15 @@ func InitConfig() {
 	log.Infof("Allowed LDAP Groups for Whitelist Command: %v", config.AllowedLDAPGroups)
 }
 
+func allowedCommand(cmd string) bool {
+	for _, allowedCmd := range ALLOWED_COMMANDS {
+		if allowedCmd == cmd {
+			return true
+		}
+	}
+	return false
+}
+
 func alertEscalator(ctx context.Context) error {
 	alerts, err := DB.GetAllAlerts(ctx)
 	if err != nil {
@@ -140,7 +159,7 @@ func SlackbotBackground(ctx context.Context, psmsg pubsub.Message) error {
 
 	if td.Action == common.SlashCommand {
 		log.Infof("Got slash command: %s", td.SlashCommand.Cmd)
-		if td.SlashCommand.Cmd == WHITELIST_IP_SLASH_COMMAND || td.SlashCommand.Cmd == STAGING_WHITELIST_IP_SLASH_COMMAND {
+		if allowedCommand(td.SlashCommand.Cmd) {
 			resp, err := handleWhitelistCmd(ctx, td.SlashCommand, DB)
 			if err != nil {
 				log.Errorf("error handling whitelist command: %s", err)
@@ -176,7 +195,7 @@ func SlackbotBackground(ctx context.Context, psmsg pubsub.Message) error {
 		if err != nil {
 			log.Errorf("Error escalating alerts: %s", err)
 		}
-		err = DB.RemoveExpiredWhitelistedIps(ctx)
+		err = DB.RemoveExpiredWhitelistedObjects(ctx)
 		if err != nil {
 			log.Errorf("Error purging expired whitelisted ips: %s", err)
 		}

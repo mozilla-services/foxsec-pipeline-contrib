@@ -3,13 +3,14 @@ package slackbotbackground
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/mozilla-services/foxsec-pipeline-contrib/common"
 
 	"github.com/nlopes/slack"
 	log "github.com/sirupsen/logrus"
@@ -18,9 +19,17 @@ import (
 var rxEmail = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
 var ROUGHLY_TEN_YEARS_FROM_NOW = time.Hour * 24 * 30 * 12 * 10
 
-func checkUsersGroups(email string) (bool, error) {
+func isEmailValid(email string) error {
 	if len(email) > 254 || !rxEmail.MatchString(email) {
-		return false, fmt.Errorf("Email (%s) is invalid", email)
+		return fmt.Errorf("Email (%s) is invalid", email)
+	}
+	return nil
+}
+
+func checkUsersGroups(email string) (bool, error) {
+	err := isEmailValid(email)
+	if err != nil {
+		return false, err
 	}
 
 	person, err := globals.personsClient.GetPersonByEmail(email)
@@ -44,27 +53,50 @@ func checkUsersGroups(email string) (bool, error) {
 	return false, nil
 }
 
-func parseCommandText(text string) (net.IP, time.Time, string, error) {
+func parseWhitelistText(text, typestr string) (string, time.Time, string, error) {
 	splitCmd := strings.Split(text, " ")
 
-	ip := net.ParseIP(splitCmd[0])
-	if ip == nil {
-		m := fmt.Sprintf("Got invalid IP: %s", splitCmd[0])
-		errMsg := m
-		return net.IP{}, time.Time{}, errMsg, errors.New(m)
+	obj := splitCmd[0]
+	var err error
+	if typestr == common.EMAIL_TYPE {
+		err = isEmailValid(obj)
+	} else if typestr == common.IP_TYPE {
+		ip := net.ParseIP(obj)
+		if ip == nil {
+			err = fmt.Errorf("Got invalid IP: %s", obj)
+		} else {
+			obj = ip.String()
+		}
+	} else {
+		err = fmt.Errorf("Invalid type")
 	}
 
+	if err != nil {
+		m := fmt.Sprintf("Got invalid %s: %s", typestr, obj)
+		errMsg := m
+		return "", time.Time{}, errMsg, err
+	}
+
+	expiresAt, err := parseExpires(splitCmd)
+	if err != nil {
+		log.Errorf("Error parsing duration: %s", err)
+		errMsg := fmt.Sprintf("Was unable to parse duration: %s\n%s", splitCmd[1], DURATION_DOC)
+		return "", time.Time{}, errMsg, err
+	}
+
+	return obj, expiresAt, "", nil
+}
+
+func parseExpires(splitText []string) (time.Time, error) {
 	var expiresDur time.Duration
 	var err error
-	if len(splitCmd) == 2 {
-		if splitCmd[1] == "never" {
+	if len(splitText) == 2 {
+		if splitText[1] == "never" {
 			expiresDur = ROUGHLY_TEN_YEARS_FROM_NOW
 		} else {
-			expiresDur, err = time.ParseDuration(splitCmd[1])
+			expiresDur, err = time.ParseDuration(splitText[1])
 			if err != nil {
-				log.Errorf("Error parsing duration: %s", err)
-				errMsg := fmt.Sprintf("Was unable to parse duration: %s\n%s", splitCmd[1], DURATION_DOC)
-				return net.IP{}, time.Time{}, errMsg, err
+				return time.Time{}, err
 			}
 			// Clamp expires duration to >5 minutes
 			if expiresDur < time.Minute*5 {
@@ -75,9 +107,7 @@ func parseCommandText(text string) (net.IP, time.Time, string, error) {
 		expiresDur = DEFAULT_EXPIRATION_DURATION
 	}
 
-	expiresAt := time.Now().Add(expiresDur)
-
-	return ip, expiresAt, "", nil
+	return time.Now().Add(expiresDur), nil
 }
 
 func sendSlackCallback(msg *slack.Msg, responseUrl string) error {
@@ -98,12 +128,12 @@ func isAlertConfirm(callbackId string) bool {
 	return strings.HasPrefix(callbackId, "alert_confirmation")
 }
 
-func deleteIpFromIprepd(ip string) error {
+func deleteObjFromIprepd(obj, typestr string) error {
 	client := http.Client{Timeout: time.Second * 10}
 	for _, iprepdInstance := range config.IprepdInstances {
-		log.Infof("Sending DELETE request to %s for %s", iprepdInstance.URL, ip)
+		log.Infof("Sending DELETE request to %s for %s/%s", iprepdInstance.URL, typestr, obj)
 
-		req, err := http.NewRequest("DELETE", iprepdInstance.URL+"/"+ip, nil)
+		req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/type/%s/%s", iprepdInstance.URL, typestr, obj), nil)
 		if err != nil {
 			return err
 		}
