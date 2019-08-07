@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/mozilla-services/foxsec-pipeline-contrib/common"
@@ -66,29 +67,6 @@ func InitConfig() {
 	if err != nil {
 		log.Fatalf("Could not create datastore client: %s", err)
 	}
-}
-
-func getLogs(from string) ([]*management.Log, error) {
-	var collectedLogs []*management.Log
-
-	for {
-		logs, err := logClient.List(func(v url.Values) {
-			v.Set("from", from)
-			v.Set("take", "100")
-			v.Set("sort", "date:1")
-		})
-		if err != nil {
-			return nil, err
-		}
-		if len(logs) == 0 {
-			break
-		}
-		for _, l := range logs {
-			collectedLogs = append(collectedLogs, l)
-		}
-		from = *logs[len(logs)-1].ID
-	}
-	return collectedLogs, nil
 }
 
 type lastLogId struct {
@@ -155,25 +133,37 @@ func Auth0Pull(ctx context.Context, psmsg PubSubMessage) error {
 		return err
 	}
 
-	logs, err := getLogs(llid.LastLogId)
-	if err != nil {
-		log.Errorf("Error getting logs: %s", err)
-		return err
-	}
-
 	logger := stackdriverClient.Logger(LOGGER_NAME)
 
-	for _, log := range logs {
-		logger.Log(stackdriver.Entry{Payload: log})
+	for {
+		logs, err := logClient.List(func(v url.Values) {
+			v.Set("from", llid.LastLogId)
+			v.Set("take", "100")
+		})
+		if err != nil {
+			log.Errorf("Error getting logs: %s", err)
+			break
+		}
+		if len(logs) == 0 {
+			break
+		}
+
+		sort.Slice(logs, func(i, j int) bool {
+			return logs[i].Date.Before(*logs[j].Date)
+		})
+
+		for _, log := range logs {
+			logger.Log(stackdriver.Entry{Payload: log})
+		}
+		log.Infof("auth0pull logged %d entries", len(logs))
+		llid.LastLogId = *logs[len(logs)-1].ID
 	}
-	log.Infof("auth0pull logged %d entries", len(logs))
 
 	err = logger.Flush()
 	if err != nil {
 		return err
 	}
 
-	llid.LastLogId = *logs[len(logs)-1].ID
 	err = llid.save(ctx)
 	if err != nil {
 		return err

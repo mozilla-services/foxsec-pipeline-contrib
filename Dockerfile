@@ -9,7 +9,7 @@ RUN apt-get install google-cloud-sdk-datastore-emulator net-tools netcat -y
 
 COPY . /go/src/github.com/mozilla-services/foxsec-pipeline-contrib
 RUN cd /go/src/github.com/mozilla-services/foxsec-pipeline-contrib && \
-    GO111MODULE=on go get ./...
+    GO111MODULE=on GOPROXY=https://proxy.golang.org go get ./...
 
 COPY docker-entrypoint.sh /
 ENTRYPOINT ["/docker-entrypoint.sh"]
