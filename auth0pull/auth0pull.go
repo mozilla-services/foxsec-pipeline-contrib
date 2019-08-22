@@ -69,6 +69,45 @@ func InitConfig() {
 	}
 }
 
+func getLatestLogEventId() (*string, error) {
+	today := time.Now().Format("2006-01-02")
+
+	logs, err := logClient.List(func(v url.Values) {
+		v.Set("q", "date:"+today)
+	})
+	if err != nil {
+		log.Errorf("Error getting latest log: %s", err)
+		return nil, err
+	}
+
+	sort.Slice(logs, func(i, j int) bool {
+		return logs[i].Date.Before(*logs[j].Date)
+	})
+	lastLogId := logs[len(logs)-1].ID
+
+	for {
+		logs, err := logClient.List(func(v url.Values) {
+			v.Set("from", *lastLogId)
+			v.Set("take", "100")
+		})
+		if err != nil {
+			log.Errorf("Error getting latest log: %s", err)
+			return nil, err
+		}
+		if len(logs) == 0 {
+			break
+		}
+
+		sort.Slice(logs, func(i, j int) bool {
+			return logs[i].Date.Before(*logs[j].Date)
+		})
+
+		lastLogId = logs[len(logs)-1].ID
+	}
+
+	return lastLogId, nil
+}
+
 type lastLogId struct {
 	LastLogId string    `json:"last_log_id"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -129,8 +168,14 @@ type PubSubMessage struct {
 func Auth0Pull(ctx context.Context, psmsg PubSubMessage) error {
 	llid, err := loadLastLogId(ctx)
 	if err != nil {
-		log.Errorf("Error loading last log id: %s", err)
-		return err
+		log.Errorf("Error loading last log id - Err: %s - Trying to get latest log event from auth0", err)
+
+		latestlid, err := getLatestLogEventId()
+		if err != nil {
+			log.Errorf("Failed to get latest log event from auth0: %s", err)
+			return err
+		}
+		llid = &lastLogId{LastLogId: *latestlid, UpdatedAt: time.Now()}
 	}
 
 	logger := stackdriverClient.Logger(LOGGER_NAME)
