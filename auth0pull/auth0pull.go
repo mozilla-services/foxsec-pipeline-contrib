@@ -12,9 +12,9 @@ import (
 
 	"cloud.google.com/go/datastore"
 	stackdriver "cloud.google.com/go/logging"
+	"github.com/ajvb/auth0/management"
 	log "github.com/sirupsen/logrus"
 	"go.mozilla.org/mozlogrus"
-	"gopkg.in/auth0.v1/management"
 )
 
 const (
