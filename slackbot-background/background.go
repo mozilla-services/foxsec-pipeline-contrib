@@ -29,6 +29,8 @@ const (
 		"5 minutes, it is increased to 5 minutes. If you do not want the " +
 		"whitelisted IP to expire, put 'never' as the expiration. This " +
 		"will make the expiration duration roughly ten years from now."
+
+	FOURTEEN_DAYS_AGO = time.Hour * 24 * 14
 )
 
 var (
@@ -198,6 +200,10 @@ func SlackbotBackground(ctx context.Context, psmsg pubsub.Message) error {
 		err = DB.RemoveExpiredWhitelistedObjects(ctx)
 		if err != nil {
 			log.Errorf("Error purging expired whitelisted ips: %s", err)
+		}
+		err = DB.RemoveAlertsOlderThan(ctx, FOURTEEN_DAYS_AGO)
+		if err != nil {
+			log.Errorf("Error removing old alerts: %s", err)
 		}
 	}
 

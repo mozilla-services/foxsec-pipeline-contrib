@@ -53,6 +53,13 @@ func TestAlertDB(t *testing.T) {
 	assert.True(t, a.Timestamp.Equal(alerts[0].Timestamp))
 	assert.Equal(t, nna.Metadata, alerts[0].Metadata)
 
+	err = db.RemoveAlertsOlderThan(context.Background(), time.Nanosecond)
+	assert.NoError(t, err)
+
+	alerts, err = db.GetAllAlerts(context.Background())
+	assert.NoError(t, err)
+	assert.True(t, 0 == len(alerts))
+
 	err = db.Close()
 	assert.NoError(t, err)
 }

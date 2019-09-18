@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"cloud.google.com/go/datastore"
 )
@@ -188,4 +189,26 @@ func (db *DBClient) SaveAlert(ctx context.Context, alert *Alert) error {
 		return err
 	}
 	return nil
+}
+
+func (db *DBClient) RemoveAlertsOlderThan(ctx context.Context, timeAgo time.Duration) error {
+	alerts, err := db.GetAllAlerts(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, alert := range alerts {
+		if !alert.IsStatus(ALERT_NEW) && alert.OlderThan(timeAgo) {
+			err = db.DeleteAlert(ctx, alert)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (db *DBClient) DeleteAlert(ctx context.Context, alert *Alert) error {
+	return db.dsClient.Delete(ctx, db.alertKey(alert.Id))
 }
