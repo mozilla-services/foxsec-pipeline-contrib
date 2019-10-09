@@ -281,7 +281,8 @@ func (e *emitter) emit() error {
 			}
 			buf, err := json.Marshal(out)
 			if err != nil {
-				return err
+				log.Error(err)
+				continue
 			}
 			log.Infof("%v\n", string(buf))
 		}
@@ -293,15 +294,21 @@ func (e *emitter) emit() error {
 	for _, v := range e.events {
 		cv, err := v.toInterface()
 		if err != nil {
-			return err
+			log.Infof("Raw event: %v", v)
+			log.Errorf("Can't convert to interface: %s", err)
+			continue
 		}
 		out, err := toMozLog(cv)
 		if err != nil {
-			return err
+			log.Infof("Raw event as an interface: %v", cv)
+			log.Errorf("Can't convert to moz log: %s", err)
+			continue
 		}
 		e, err := json.Marshal(out)
 		if err != nil {
-			return err
+			log.Infof("Raw event converted to MozLog: %v", out)
+			log.Errorf("Can't marshall event to json: %s", err)
+			continue
 		}
 		logger.Log(stackdriver.Entry{Payload: json.RawMessage(e)})
 	}
