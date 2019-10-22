@@ -3,7 +3,7 @@ all: build
 # Package lambda function in zip file
 package:
 	docker run -i --rm -v `pwd`:/go/src/github.com/mozilla-services/cloudtrail-streamer -e CGO_ENABLED=0\
-		golang:1.10 \
+		golang:1.13 \
 		/bin/bash -c 'cd /go/src/github.com/mozilla-services/cloudtrail-streamer && make docker_build'
 
 # Development target, upload package to s3
@@ -27,17 +27,11 @@ local_build: clean build
 clean:
 	rm -f cloudtrail-streamer cloudtrail-streamer.zip
 
-VGO := $(shell command -v vgo 2> /dev/null)
-install_vgo:
-ifndef VGO
-	go get -u golang.org/x/vgo
-endif
-
-build: install_vgo
-	vgo build -ldflags="-s -w" -o cloudtrail-streamer
+build:
+	go build -ldflags="-s -w" -o cloudtrail-streamer
 
 debug: build
 	env CT_DEBUG_LOGGING=1 ./cloudtrail-streamer
 
-test: install_vgo
-	vgo test ./...
+test:
+	go test ./...
