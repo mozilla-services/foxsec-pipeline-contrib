@@ -9,9 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -19,7 +17,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/kinesis"
 	"github.com/aws/aws-sdk-go/service/s3"
 
 	stackdriver "cloud.google.com/go/logging"
@@ -49,14 +46,10 @@ var (
 const GZIP_CONTENT_TYPE = "application/x-gzip"
 
 type Config struct {
-	awsKinesisStream    string // Kinesis stream for event submission
-	awsKinesisRegion    string // AWS region the kinesis stream exists in
-	awsKinesisBatchSize int    // Number of records in a batched put to the kinesis stream
-	awsS3RoleArn        string // Optional Role to assume for S3 operations
-	eventType           string // Whether to use the S3 or SNS event handler. Default is S3.
+	awsS3RoleArn string // Optional Role to assume for S3 operations
+	eventType    string // Whether to use the S3 or SNS event handler. Default is S3.
 
-	awsKinesisClient *kinesis.Kinesis
-	awsSession       *session.Session
+	awsSession *session.Session
 
 	gcpProjectId       string // GCP Project Id for where the PubSub Topic or Stackdriver logger live
 	gcpTopicId         string // GCP PubSub Topic Id
@@ -110,38 +103,10 @@ func (c *Config) init() error {
 		c.eventFilters = parseFilters(filters)
 	}
 
-	c.awsKinesisStream = os.Getenv("CT_KINESIS_STREAM")
 	c.gcpTopicId = os.Getenv("CT_TOPIC_ID")
 	c.gcpStackdriverName = os.Getenv("CT_STACKDRIVER_NAME")
-	if c.awsKinesisStream == "" && c.gcpTopicId == "" && c.gcpStackdriverName == "" {
-		return fmt.Errorf("At least one of CT_KINESIS_STREAM, CT_TOPIC_ID, or CT_STACKDRIVER_NAME must be set")
-	}
-
-	c.awsKinesisRegion = os.Getenv("CT_KINESIS_REGION")
-	c.awsKinesisBatchSize = 500
-	batchSize := os.Getenv("CT_KINESIS_BATCH_SIZE")
-
-	if c.awsKinesisStream != "" {
-		if c.awsKinesisRegion == "" {
-			return fmt.Errorf("CT_KINESIS_REGION must be set")
-		}
-
-		if batchSize != "" {
-			var err error
-			c.awsKinesisBatchSize, err = strconv.Atoi(batchSize)
-			if err != nil {
-				log.Fatalf("Error converting CT_KINESIS_BATCH_SIZE (%v) to int: %s", batchSize, err)
-			}
-
-			if c.awsKinesisBatchSize <= 0 || c.awsKinesisBatchSize > 500 {
-				return fmt.Errorf("CT_KINESIS_BATCH_SIZE must be set to a value inbetween 1 and 500")
-			}
-		}
-
-		c.awsKinesisClient = kinesis.New(
-			c.awsSession,
-			aws.NewConfig().WithRegion(c.awsKinesisRegion),
-		)
+	if c.gcpTopicId == "" && c.gcpStackdriverName == "" {
+		return fmt.Errorf("Either CT_TOPIC_ID or CT_STACKDRIVER_NAME must be set")
 	}
 
 	c.gcpProjectId = os.Getenv("CT_PROJECT_ID")
@@ -166,6 +131,9 @@ func (c *Config) init() error {
 			c.stackdriverClient, err = stackdriver.NewClient(context.Background(), c.gcpProjectId, option.WithCredentialsJSON(gcpPubSubCredentials))
 			if err != nil {
 				log.Fatalf("Error creating stackdriverClient. Err: %s", err)
+			}
+			if err := c.stackdriverClient.Ping(context.Background()); err != nil {
+				log.Fatalf("Error starting up stackdriver client. Err: %s", err)
 			}
 		}
 	}
@@ -264,18 +232,12 @@ func readLogFile(object *s3.GetObjectOutput) (*CloudTrailFile, error) {
 }
 
 type Streamer struct {
-	kinesisStreamer     *KinesisStreamer
 	pubsubStreamer      *PubSubStreamer
 	stackdriverStreamer *StackdriverStreamer
-	quit                chan int
 }
 
 func NewStreamer() *Streamer {
-	s := &Streamer{quit: make(chan int)}
-
-	if globalConfig.awsKinesisStream != "" {
-		s.kinesisStreamer = NewKinesisStreamer()
-	}
+	s := &Streamer{}
 
 	if globalConfig.gcpTopicId != "" {
 		s.pubsubStreamer = NewPubSubStreamer(globalConfig.pubsubClient)
@@ -290,23 +252,13 @@ func NewStreamer() *Streamer {
 
 func (s *Streamer) Close() {
 	log.Info("Closing streamers")
-	if s.kinesisStreamer != nil {
-		s.kinesisStreamer.Close()
-	}
 	if s.pubsubStreamer != nil {
 		s.pubsubStreamer.Close()
 	}
 	if s.stackdriverStreamer != nil {
 		s.stackdriverStreamer.Close()
 	}
-	s.quit <- 0
-}
-
-func (s *Streamer) streamInBackground() {
-	if s.kinesisStreamer != nil {
-		go s.kinesisStreamer.Stream()
-	}
-	<-s.quit
+	log.Info("Streamers closed.")
 }
 
 func (s *Streamer) Stream(awsRegion string, bucket string, objectKey string) error {
@@ -347,9 +299,6 @@ func (s *Streamer) streamToServices(logfile *CloudTrailFile) {
 			continue
 		}
 
-		if s.kinesisStreamer != nil {
-			s.kinesisStreamer.Send(encodedRecord)
-		}
 		if s.pubsubStreamer != nil {
 			s.pubsubStreamer.Send(encodedRecord)
 		}
@@ -357,76 +306,6 @@ func (s *Streamer) streamToServices(logfile *CloudTrailFile) {
 			s.stackdriverStreamer.Send(encodedRecord)
 		}
 	}
-}
-
-type KinesisStreamer struct {
-	wg   *sync.WaitGroup
-	ch   chan string
-	quit chan int
-}
-
-func NewKinesisStreamer() *KinesisStreamer {
-	ks := &KinesisStreamer{
-		wg:   &sync.WaitGroup{},
-		ch:   make(chan string),
-		quit: make(chan int),
-	}
-	return ks
-}
-
-func (k *KinesisStreamer) Stream() error {
-	var kRecordsBuf []*kinesis.PutRecordsRequestEntry
-	k.wg.Add(1)
-	defer k.wg.Done()
-
-	for {
-		select {
-		case r := <-k.ch:
-			record := []byte(r)
-			kRecordsBuf = append(kRecordsBuf, &kinesis.PutRecordsRequestEntry{
-				Data:         record,
-				PartitionKey: aws.String("key"),
-			})
-
-			if len(kRecordsBuf) > 0 && len(kRecordsBuf)%globalConfig.awsKinesisBatchSize == 0 {
-				log.Infof("PutRecords to kinesis with a len of %d", len(kRecordsBuf))
-				_, err := globalConfig.awsKinesisClient.PutRecords(&kinesis.PutRecordsInput{
-					Records:    kRecordsBuf,
-					StreamName: aws.String(globalConfig.awsKinesisStream),
-				})
-				if err != nil {
-					log.Errorf("Error pushing records to kinesis: %s", err)
-					return err
-				}
-
-				kRecordsBuf = kRecordsBuf[:0]
-			}
-
-		case <-k.quit:
-			if len(kRecordsBuf) != 0 {
-				log.Infof("PutRecords to kinesis with a len of %d", len(kRecordsBuf))
-				_, err := globalConfig.awsKinesisClient.PutRecords(&kinesis.PutRecordsInput{
-					Records:    kRecordsBuf,
-					StreamName: aws.String(globalConfig.awsKinesisStream),
-				})
-				if err != nil {
-					log.Errorf("Error pushing records to kinesis: %s", err)
-					return err
-				}
-			}
-			return nil
-		}
-	}
-}
-
-func (k *KinesisStreamer) Close() {
-	k.quit <- 0
-	k.wg.Wait()
-	return
-}
-
-func (k *KinesisStreamer) Send(record []byte) {
-	k.ch <- string(record)
 }
 
 type PubSubStreamer struct {
@@ -440,11 +319,12 @@ func NewPubSubStreamer(client *pubsub.Client) *PubSubStreamer {
 }
 
 func (ps *PubSubStreamer) Send(record []byte) {
-	ps.topic.Publish(context.TODO(), &pubsub.Message{Data: record})
+	ps.topic.Publish(context.Background(), &pubsub.Message{Data: record})
 }
 
 func (ps *PubSubStreamer) Close() {
 	ps.topic.Stop()
+	log.Info("PubSub Streamer closed")
 }
 
 type StackdriverStreamer struct {
@@ -465,16 +345,17 @@ func (s *StackdriverStreamer) Close() {
 	if err != nil {
 		log.Errorf("Error flushing stackdriver logger. Err: %s", err)
 	}
+	log.Info("Stackdriver Streamer closed")
 }
 
 func S3Handler(ctx context.Context, s3Event events.S3Event) error {
 	log.Infof("Handling S3 event: %v", s3Event)
 
 	streamer := NewStreamer()
-	go streamer.streamInBackground()
 	defer streamer.Close()
 
 	for _, s3Record := range s3Event.Records {
+		log.Infof("Streaming from bucket %s and key %s", s3Record.S3.Bucket.Name, s3Record.S3.Object.Key)
 		err := streamer.Stream(
 			s3Record.AWSRegion,
 			s3Record.S3.Bucket.Name,

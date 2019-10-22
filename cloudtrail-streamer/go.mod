@@ -1,5 +1,7 @@
 module github.com/mozilla-services/cloudtrail-streamer
 
+go 1.13
+
 require (
 	cloud.google.com/go v0.29.0
 	github.com/Azure/azure-sdk-for-go v21.1.0+incompatible // indirect
