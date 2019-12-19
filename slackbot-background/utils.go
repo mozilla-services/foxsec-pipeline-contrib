@@ -3,6 +3,7 @@ package slackbotbackground
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -116,10 +117,14 @@ func sendSlackCallback(msg *slack.Msg, responseUrl string) error {
 		log.Errorf("Error marshalling slack message: %s", err)
 		return err
 	}
-	_, err = client.Post(responseUrl, "application/json", bytes.NewBuffer(j))
+	resp, err := client.Post(responseUrl, "application/json", bytes.NewBuffer(j))
 	if err != nil {
 		log.Errorf("Error sending slack callback: %s", err)
 		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		log.Errorf("Received response to slack callback with code %d", resp.StatusCode)
+		return errors.New(fmt.Sprintf("Slack callback with response %d", resp.StatusCode))
 	}
 	return nil
 }
@@ -147,4 +152,13 @@ func deleteObjFromIprepd(obj, typestr string) error {
 		}
 	}
 	return nil
+}
+
+func getCallerDetails(userid string) string {
+	userProfile, err := globals.slackClient.GetUserProfile(userid, false)
+	if err != nil {
+		log.Errorf("Unable to find slack user with id %s", userid)
+		return "unknown user"
+	}
+	return fmt.Sprintf("%s (%s)", userProfile.RealNameNormalized, userProfile.Email)
 }
