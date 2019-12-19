@@ -76,9 +76,9 @@ func (db *DBClient) RemoveExpiredWhitelistedObjects(ctx context.Context) error {
 
 func (db *DBClient) GetAllWhitelistedObjects(ctx context.Context) ([]*WhitelistedObject, error) {
 	var wos []*WhitelistedObject
-	var states []*StateField
 	for _, kind := range []string{IP_TYPE, EMAIL_TYPE} {
 		nq := datastore.NewQuery(kind).Namespace(WHITELISTED_OBJ_NAMESPACE)
+		states := []*StateField{}
 		_, err := db.dsClient.GetAll(ctx, nq, &states)
 		if err != nil {
 			return nil, err
