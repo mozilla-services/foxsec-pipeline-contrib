@@ -22,7 +22,8 @@ const (
 	WHITELIST_EMAIL_SLASH_COMMAND         = "/whitelist_email"
 	STAGING_WHITELIST_EMAIL_SLASH_COMMAND = "/staging_whitelist_email"
 
-	SECOPS_911_COMMAND = "/secops911"
+	SECOPS_911_COMMAND         = "/secops911"
+	STAGING_SECOPS_911_COMMAND = "/staging_secops911"
 
 	DEFAULT_EXPIRATION_DURATION = time.Hour * 24
 	DURATION_DOC                = "FoxsecBot uses Go's time.ParseDuration internally " +
@@ -49,6 +50,7 @@ var (
 		WHITELIST_EMAIL_SLASH_COMMAND,
 		STAGING_WHITELIST_EMAIL_SLASH_COMMAND,
 		SECOPS_911_COMMAND,
+		STAGING_SECOPS_911_COMMAND,
 	}
 
 	// dirty hack to disable init in unit tests
@@ -176,7 +178,7 @@ func SlackbotBackground(ctx context.Context, psmsg pubsub.Message) error {
 	if td.Action == common.SlashCommand {
 		log.Infof("Got slash command: %s", td.SlashCommand.Cmd)
 		switch td.SlashCommand.Cmd {
-		case SECOPS_911_COMMAND:
+		case SECOPS_911_COMMAND, STAGING_SECOPS_911_COMMAND:
 			resp, err = handle911Cmd(ctx, td.SlashCommand, DB)
 		case WHITELIST_EMAIL_SLASH_COMMAND, WHITELIST_IP_SLASH_COMMAND, STAGING_WHITELIST_EMAIL_SLASH_COMMAND, STAGING_WHITELIST_IP_SLASH_COMMAND:
 			resp, err = handleWhitelistCmd(ctx, td.SlashCommand, DB)

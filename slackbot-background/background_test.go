@@ -100,6 +100,55 @@ func TestSuccessfulSecOps911WithKnownUser(t *testing.T) {
 	assert.Contains(t, fakeMailer.ArgList911messages, "who you gonna call")
 }
 
+func TestSuccessfulStagingSecOps911WithUnknownUser(t *testing.T) {
+	fakeMailer, fakeTransport := setupTest()
+	data := `{"action_type": "slash_command", "slash_command": {"Cmd": "/staging_secops911", "ResponseURL": "responseurl", "Text": "testing", "UserID": "123"}}`
+	psmsg := &pubsub.Message{
+		Data: []byte(data),
+	}
+
+	err := SlackbotBackground(context.Background(), *psmsg)
+
+	assert.Nil(t, err)
+
+	// check 911 email was sent and not other escalations
+	assert.Equal(t, 1, fakeMailer.Num911Sent)
+	assert.Equal(t, 0, fakeMailer.NumEscalationsSent)
+	assert.Len(t, fakeTransport.RequestURLs, 2)
+	assert.Contains(t, fakeTransport.RequestURLs, SlackProfileGetURL)
+	assert.Contains(t, fakeTransport.RequestURLs, "responseurl")
+	assert.Contains(t, fakeMailer.ArgList911callers, "unknown user")
+	assert.Contains(t, fakeMailer.ArgList911messages, "testing")
+}
+
+func TestSuccessfulStagingSecOps911WithKnownUser(t *testing.T) {
+	fakeMailer, fakeTransport := setupTest()
+	data := `{"action_type": "slash_command", "slash_command": {"Cmd": "/staging_secops911", "ResponseURL": "responseurl", "Text": "who you gonna call", "UserID": "123"}}`
+	psmsg := &pubsub.Message{
+		Data: []byte(data),
+	}
+	fakeTransport.AddHandler(SlackProfileGetURL, func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: 200,
+			Body:       ioutil.NopCloser(bytes.NewBufferString(SampleUser)),
+			Header:     make(http.Header),
+		}, nil
+	})
+
+	err := SlackbotBackground(context.Background(), *psmsg)
+
+	assert.Nil(t, err)
+
+	// check 911 email was sent and not other escalations
+	assert.Equal(t, 1, fakeMailer.Num911Sent)
+	assert.Equal(t, 0, fakeMailer.NumEscalationsSent)
+	assert.Len(t, fakeTransport.RequestURLs, 2)
+	assert.Contains(t, fakeTransport.RequestURLs, "https://slack.com/api/users.profile.get")
+	assert.Contains(t, fakeTransport.RequestURLs, "responseurl")
+	assert.Contains(t, fakeMailer.ArgList911callers, "Egon Spengler (spengler@ghostbusters.example.com)")
+	assert.Contains(t, fakeMailer.ArgList911messages, "who you gonna call")
+}
+
 func TestUnsupportedSlashCommand(t *testing.T) {
 	fakeMailer, fakeTransport := setupTest()
 	data := `{"action_type": "slash_command", "slash_command": {"Cmd": "/fakeCommand", "ResponseURL": "responseurl", "Text": "testing", "UserID": "123"}}`
