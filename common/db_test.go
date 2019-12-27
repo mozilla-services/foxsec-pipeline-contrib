@@ -48,7 +48,7 @@ func TestAlertDB(t *testing.T) {
 
 	alerts, err := db.GetAllAlerts(context.Background())
 	assert.NoError(t, err)
-	assert.True(t, 1 == len(alerts))
+	assert.Equal(t, 1, len(alerts))
 	assert.Equal(t, a.Id, alerts[0].Id)
 	assert.True(t, a.Timestamp.Equal(alerts[0].Timestamp))
 	assert.Equal(t, nna.Metadata, alerts[0].Metadata)
@@ -58,7 +58,7 @@ func TestAlertDB(t *testing.T) {
 
 	alerts, err = db.GetAllAlerts(context.Background())
 	assert.NoError(t, err)
-	assert.True(t, 0 == len(alerts))
+	assert.Equal(t, 0, len(alerts))
 
 	err = db.Close()
 	assert.NoError(t, err)
@@ -76,7 +76,7 @@ func TestWhitelistedObjectDB(t *testing.T) {
 
 	wips, err := db.GetAllWhitelistedObjects(context.Background())
 	assert.NoError(t, err)
-	assert.True(t, 1 == len(wips))
+	assert.Equal(t, 1, len(wips))
 	assert.True(t, WOBJEqual(wip, wips[0]))
 
 	expiredWip, err := NewWhitelistedObject("127.0.0.2", "ip", time.Now().Add(time.Duration(-1)*time.Hour), "test")
@@ -85,14 +85,14 @@ func TestWhitelistedObjectDB(t *testing.T) {
 	assert.NoError(t, err)
 	wips, err = db.GetAllWhitelistedObjects(context.Background())
 	assert.NoError(t, err)
-	assert.True(t, 2 == len(wips))
+	assert.Equal(t, 2, len(wips))
 
 	err = db.RemoveExpiredWhitelistedObjects(context.Background())
 	assert.NoError(t, err)
 
 	wips, err = db.GetAllWhitelistedObjects(context.Background())
 	assert.NoError(t, err)
-	assert.True(t, 1 == len(wips))
+	assert.Equal(t, 1, len(wips))
 	assert.True(t, WOBJEqual(wip, wips[0]))
 
 	err = db.DeleteWhitelistedObject(context.Background(), wip)
