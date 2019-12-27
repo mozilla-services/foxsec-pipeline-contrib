@@ -2,6 +2,7 @@ package slackbotbackground
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"time"
@@ -20,6 +21,9 @@ const (
 	STAGING_WHITELIST_IP_SLASH_COMMAND    = "/staging_whitelist_ip"
 	WHITELIST_EMAIL_SLASH_COMMAND         = "/whitelist_email"
 	STAGING_WHITELIST_EMAIL_SLASH_COMMAND = "/staging_whitelist_email"
+
+	SECOPS_911_COMMAND         = "/secops911"
+	STAGING_SECOPS_911_COMMAND = "/staging_secops911"
 
 	DEFAULT_EXPIRATION_DURATION = time.Hour * 24
 	DURATION_DOC                = "FoxsecBot uses Go's time.ParseDuration internally " +
@@ -45,10 +49,18 @@ var (
 		STAGING_WHITELIST_IP_SLASH_COMMAND,
 		WHITELIST_EMAIL_SLASH_COMMAND,
 		STAGING_WHITELIST_EMAIL_SLASH_COMMAND,
+		SECOPS_911_COMMAND,
+		STAGING_SECOPS_911_COMMAND,
 	}
+
+	// dirty hack to disable init in unit tests
+	_testing = false
 )
 
 func init() {
+	if _testing {
+		return
+	}
 	mozlogrus.Enable("slackbot-background")
 	client = &http.Client{
 		Timeout: 10 * time.Second,
@@ -67,7 +79,7 @@ func init() {
 type Globals struct {
 	slackClient   *slack.Client
 	personsClient *persons_api.Client
-	sesClient     *common.SESClient
+	sesClient     common.EscalationMailer
 }
 
 func InitConfig() {
@@ -153,6 +165,10 @@ func alertEscalator(ctx context.Context) error {
 }
 
 func SlackbotBackground(ctx context.Context, psmsg pubsub.Message) error {
+	var (
+		resp *slack.Msg
+		err  error
+	)
 	td, err := common.PubSubMessageToTriggerData(psmsg)
 	if err != nil {
 		log.Errorf("Error decoding pubsub message: %s", err)
@@ -161,17 +177,24 @@ func SlackbotBackground(ctx context.Context, psmsg pubsub.Message) error {
 
 	if td.Action == common.SlashCommand {
 		log.Infof("Got slash command: %s", td.SlashCommand.Cmd)
-		if allowedCommand(td.SlashCommand.Cmd) {
-			resp, err := handleWhitelistCmd(ctx, td.SlashCommand, DB)
+		switch td.SlashCommand.Cmd {
+		case SECOPS_911_COMMAND, STAGING_SECOPS_911_COMMAND:
+			resp, err = handle911Cmd(ctx, td.SlashCommand, DB)
+		case WHITELIST_EMAIL_SLASH_COMMAND, WHITELIST_IP_SLASH_COMMAND, STAGING_WHITELIST_EMAIL_SLASH_COMMAND, STAGING_WHITELIST_IP_SLASH_COMMAND:
+			resp, err = handleWhitelistCmd(ctx, td.SlashCommand, DB)
+		default:
+			resp, err = nil, errors.New("Unsupported slash command")
+		}
+		if err != nil {
+			log.Errorf("error handling %s command: %s", td.SlashCommand.Cmd, err)
+			return err
+		}
+		if resp != nil {
+			log.Infof("Sending response: %s", resp.Text)
+			err = sendSlackCallback(resp, td.SlashCommand.ResponseURL)
 			if err != nil {
-				log.Errorf("error handling whitelist command: %s", err)
-			}
-			if resp != nil {
-				err = sendSlackCallback(resp, td.SlashCommand.ResponseURL)
-				if err != nil {
-					log.Errorf("error sending slack callback within slash command: %s", err)
-					return err
-				}
+				log.Errorf("error sending slack callback within slash command: %s", err)
+				return err
 			}
 		}
 	} else if td.Action == common.Interaction {

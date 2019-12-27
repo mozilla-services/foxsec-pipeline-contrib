@@ -9,7 +9,7 @@ require (
 	github.com/benbjohnson/clock v0.0.0-20161215174838-7dc76406b6d3 // indirect
 	github.com/mozilla-services/foxsec-pipeline-contrib v0.0.0
 	github.com/sirupsen/logrus v1.4.2
-	go.mozilla.org/mozlogrus v1.0.1-0.20171031175137-a4ca0c1ee1cb
+	go.mozilla.org/mozlogrus v2.0.0+incompatible
 )
 
 replace github.com/mozilla-services/foxsec-pipeline-contrib v0.0.0 => ../
